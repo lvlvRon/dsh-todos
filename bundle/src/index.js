@@ -603,6 +603,9 @@ window.__ModuleLoader__.load({
       const [adding, setAdding] = React.useState(false);
       const [draft, setDraft] = React.useState('');
       const [toast, setToast] = React.useState(null);
+      const [search, setSearch] = React.useState(null);
+      const [helpOpen, setHelpOpen] = React.useState(false);
+      const [chatCollapsed, setChatCollapsed] = React.useState(false);
 
       /* —— 对话（P2 外壳，尚未接模型）—— */
       const [messages, setMessages] = React.useState([]);
@@ -947,6 +950,11 @@ window.__ModuleLoader__.load({
       else if (periodDef.kinds) visible = decorated.filter((t) => periodDef.kinds.includes(t._kind));
       if (periodDef.id === 'month') visible = visible.filter((t) => !t.dueDate || (t.dueDate >= todayStr.slice(0, 8) + '01' && t.dueDate <= monthEnd));
       if (tagFilter !== 'all') visible = visible.filter((t) => t.tag === tagFilter);
+      const keyword = (search || '').trim().toLowerCase();
+      if (keyword) {
+        visible = visible.filter((t) => (t.title || '').toLowerCase().includes(keyword)
+          || (t.notes || '').toLowerCase().includes(keyword));
+      }
 
       const plate = decorated.filter((t) => t._kind === 'today' || t._kind === 'overdue');
       const plateDone = plate.filter((t) => t.done).length;
@@ -1046,6 +1054,53 @@ window.__ModuleLoader__.load({
             h('rect', { x: 3.5, y: 5, width: 17, height: 15.5, rx: 2.5 }),
             h('path', { d: 'M3.5 9.8h17M8 3v3.2M16 3v3.2' })))),
         h('span', { className: 'todo-pill' }, plateDone + ' / ' + plate.length),
+        search !== null
+          ? h('input', {
+              className: 'todo-search', value: search, autoFocus: true,
+              placeholder: '搜索待办…',
+              onChange: (e) => setSearch(e.target.value),
+              onKeyDown: (e) => { if (e.key === 'Escape') setSearch(null); },
+            })
+          : null,
+        h('div', { className: 'todo-tools' },
+          h('button', { className: 'todo-tool', title: '帮助', onClick: () => setHelpOpen((v) => !v) },
+            h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' },
+              h('circle', { cx: 12, cy: 12, r: 8.6 }),
+              h('path', { d: 'M9.5 9.4a2.6 2.6 0 1 1 3.4 2.5c-.9.3-1.3 1-1.3 1.9v.3' }),
+              h('circle', { cx: 11.6, cy: 17, r: 0.9, fill: 'currentColor', stroke: 'none' }))),
+          h('button', {
+            className: 'todo-tool', title: '搜索', 'data-on': search !== null ? '1' : '0',
+            onClick: () => setSearch(search === null ? '' : null),
+          },
+            h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' },
+              h('circle', { cx: 10.8, cy: 10.8, r: 6.4 }),
+              h('path', { d: 'M15.6 15.6L20 20' }))),
+          h('button', {
+            className: 'todo-tool', title: '新建待办',
+            onClick: () => {
+              setView('list');
+              setAdding(true);
+              setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 30);
+            },
+          },
+            h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' },
+              h('path', { d: 'M12 5v14M5 12h14' }))),
+          h('button', {
+            className: 'todo-tool', title: chatCollapsed ? '展开助手' : '收起助手',
+            onClick: () => setChatCollapsed((v) => !v),
+          },
+            h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinejoin: 'round' },
+              h('rect', { x: 3.6, y: 5, width: 16.8, height: 14, rx: 2.6 }),
+              h('path', { d: 'M14.6 5v14' })))),
+        helpOpen
+          ? h('div', { className: 'todo-help' },
+              h('div', { className: 'todo-help-title' }, '怎么用'),
+              h('div', { className: 'todo-help-row' }, '粘贴截图或直接说一句话，会拆成待办草案'),
+              h('div', { className: 'todo-help-row' }, '草案卡：缺日期的补完才能创建，创建过的会打 ✓'),
+              h('div', { className: 'todo-help-row' }, '列表里勾选即完成，删除有 5 秒撤销'),
+              h('div', { className: 'todo-help-row' }, '输入框：Enter 发送 · Shift+Enter 换行 · Esc 关闭弹层'),
+              h('div', { className: 'todo-help-row' }, '顶部两个图标切换列表 / 日历'))
+          : null,
       );
 
       const body = h('div', { className: 'todo-body' },
@@ -1086,7 +1141,12 @@ window.__ModuleLoader__.load({
         todos === null
           ? h('div', { className: 'todo-empty' }, '加载中…')
           : (groups.length === 0
-              ? h('div', { className: 'todo-empty' }, '这里还没有待办 —— 点上面的虚线行加一条')
+              ? h('div', { className: 'todo-empty' },
+                  keyword
+                    ? '没有匹配「' + search.trim() + '」的待办'
+                    : ((todos || []).length
+                        ? '这个分组里还没有待办'
+                        : '这里还没有待办 —— 点上面的虚线行加一条'))
               : groups.map((g) => h('div', { key: g.key, className: 'todo-group' },
                   h('div', { className: 'todo-gh', 'data-alert': g.alert ? '1' : '0' },
                     h('span', null, g.label), h('em', null, g.items.length), h('i')),
@@ -1118,11 +1178,15 @@ window.__ModuleLoader__.load({
           })
         : body;
 
-      return h('div', { className: 'todo-root', ref: rootRef },
+      return h('div', {
+        className: 'todo-root',
+        ref: rootRef,
+        'data-collapsed': chatCollapsed ? '1' : '0',
+      },
         head,
         h('div', { className: 'todo-main' },
           board,
-          h(ChatPane, {
+          chatCollapsed ? null : h(ChatPane, {
             messages, busy: chatBusy, draft: chatDraft,
             onDraft: setChatDraft, onSend: sendChat,
             models, modelName, chipLabel, effortName, menuOpen: modelMenu,

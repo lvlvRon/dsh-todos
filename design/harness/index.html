@@ -78,6 +78,26 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('collapse') >= 0) {
+    var tools = document.querySelectorAll('.todo-tool');
+    if (tools.length >= 4) tools[3].click();
+  }
+  if (location.hash.indexOf('search') >= 0) {
+    var t2 = document.querySelectorAll('.todo-tool');
+    if (t2.length >= 2) t2[1].click();
+    setTimeout(function () {
+      var inp = document.querySelector('.todo-search');
+      if (inp) {
+        var setter2 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter2.call(inp, '报价');
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }, 200);
+  }
+  if (location.hash.indexOf('help') >= 0) {
+    var t = document.querySelector('.todo-tool');
+    if (t) t.click();
+  }
   if (location.hash.indexOf('create') >= 0) {
     setTimeout(function () {
       var d = location.hash.indexOf('nofill') >= 0 ? null : document.querySelector('.todo-field[data-miss="1"]');
