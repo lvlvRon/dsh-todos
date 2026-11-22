@@ -1224,71 +1224,11 @@ window.__ModuleLoader__.load({
         root.setAttribute('data-tone', lum < 0.5 ? 'dark' : 'light');
       }, []);
 
-      /* 一次性布局自检：把真实尺寸/颜色写回 Host，外部可核对，不依赖截图 */
-      React.useEffect(() => {
-        if (!window.__TODO_DEV__) return undefined;   // 仅开发期开启
-        const timer = setTimeout(() => {
-          try {
-            const root = rootRef.current;
-            if (!root) return;
-            const one = (s) => root.querySelector(s);
-            const rect = (el) => {
-              if (!el) return null;
-              const r = el.getBoundingClientRect();
-              return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
-            };
-            const chip = one('.todo-chip[data-on="1"]');
-            const cs = chip ? getComputedStyle(chip) : null;
-            const rootCs = getComputedStyle(root);
-            const TOKENS = [
-              '--dsw-alias-bg-base', '--dsw-alias-bg-layer-1', '--dsw-alias-bg-layer-2',
-              '--dsw-alias-bg-overlay', '--dsw-alias-border-l1', '--dsw-alias-border-l2',
-              '--dsw-alias-label-primary', '--dsw-alias-label-secondary',
-              '--dsw-alias-brand-primary', '--dsw-alias-state-success-primary',
-              '--dsw-alias-state-error-primary', '--dsw-alias-state-warn-primary',
-              '--dsw-alias-state-idle-primary', '--dsw-specific-sidebar-fill',
-            ];
-            const palette = {};
-            for (const name of TOKENS) palette[name] = rootCs.getPropertyValue(name).trim();
-            const row = one('.todo-row');
-            const payload = {
-              rootW: Math.round(root.getBoundingClientRect().width),
-              bodyW: one('.todo-body') ? Math.round(one('.todo-body').getBoundingClientRect().width) : null,
-              firstBlockW: one('.todo-sum') ? Math.round(one('.todo-sum').getBoundingClientRect().width) : null,
-              activeChip: chip ? { text: chip.textContent, bg: cs.backgroundColor, color: cs.color, border: cs.borderColor } : null,
-              dateText: one('.todo-date') ? one('.todo-date').textContent : null,
-              rowGeometry: row ? {
-                check: rect(row.querySelector('.todo-check')),
-                ti: rect(row.querySelector('.todo-t')),
-                tag: rect(row.querySelector('.todo-tag')),
-                when: rect(row.querySelector('.todo-when')),
-              } : null,
-              rows: root.querySelectorAll('.todo-row').length,
-              groups: [...root.querySelectorAll('.todo-gh span:first-child')].map((el) => el.textContent),
-              tone: root.getAttribute('data-tone'),
-              palette,
-            };
-            fetch('/api/todo/log', {
-              method: 'POST',
-              headers: { 'content-type': 'text/plain', 'x-dsh-todo': '1' },
-              body: 'SELFCHECK ' + JSON.stringify(payload),
-            }).catch(() => {});
-          } catch (e) {
-            fetch('/api/todo/log', {
-              method: 'POST',
-              headers: { 'content-type': 'text/plain', 'x-dsh-todo': '1' },
-              body: 'SELFCHECK_ERR ' + (e && e.message),
-            }).catch(() => {});
-          }
-        }, 900);
-        return () => clearTimeout(timer);
-      }, []);
-
+      /* ---- 派生数据 ---- */
       const todayStr = ymd(new Date());
       const weekEnd = weekEndOf(todayStr);
       const monthEnd = monthEndOf(todayStr);
 
-      /* ---- 派生数据 ---- */
       const decorated = (todos || []).map((t) => ({ ...t, _kind: groupOf(t, todayStr, weekEnd) }));
 
       const periodDef = PERIODS.find((p) => p.id === period) || PERIODS[0];

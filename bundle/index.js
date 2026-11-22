@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Host 半：待办插件。
  *
  * P1：真实数据层 —— 存储域 + 增删改查路由。
@@ -6,7 +6,6 @@
  *   WebRoute = { kind, path, handler(req: IncomingMessage, res: ServerResponse) }
  */
 
-import { appendFileSync } from 'node:fs';
 
 import { todoSpec, normalize, compare, now } from './lib/domain.js';
 import { send, fail, readJson, guard, openSse } from './lib/channel.js';
@@ -16,7 +15,6 @@ import { buildSystemPrompt, splitTasks, visibleText, TODO_QUERY_TOOL, runTodoQue
 export const inject = ['webServer', 'storageDomain'];
 export const name = 'todo';
 
-const LOG_FILE = new URL('./probe.log', import.meta.url);
 
 const WEEK_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
@@ -143,165 +141,8 @@ export async function apply(ctx) {
     handler: (req, res) => send(res, 200, { ok: true, count: table.size, at: new Date().toISOString() }),
   });
 
-  /* 自检上报：client 把布局数值写回 probe.log，便于外部核对 */
-  route({
-    kind: 'exact',
-    path: '/api/todo/log',
-    handler: async (req, res) => {
-      if (!guard(req, res)) return;
-      let body = '';
-      try {
-        for await (const chunk of req) body += chunk;
-      } catch (e) {
-        body = 'READ_ERR ' + e.message;
-      }
-      try {
-        appendFileSync(LOG_FILE, new Date().toISOString() + ' ' + body.slice(0, 8000) + '\n');
-      } catch (e) {
-        return fail(res, 500, 'log write failed: ' + e.message);
-      }
-      send(res, 200, { ok: true });
-    },
-  });
 
-  /* 模型能力诊断：默认模型是什么、支不支持图片、llm 服务可否直用 */
-  route({
-    kind: 'exact',
-    path: '/api/todo/model-diag',
-    handler: async (req, res) => {
-      if (!guard(req, res)) return;
-      const out = { ok: true };
-      try {
-        const adm = ctx.get('agentDefaultModel');
-        out.selection = adm && typeof adm.currentSelection === 'function'
-          ? adm.currentSelection()
-          : (adm ? 'service-without-currentSelection' : null);
 
-        const llm = ctx.get('llm');
-        if (!llm) {
-          out.llm = null;
-          return send(res, 200, out);
-        }
-        out.llm = {
-          listProviders: typeof llm.listProviders,
-          resolveModelInfo: typeof llm.resolveModelInfo,
-          stream: typeof llm.stream,
-        };
-        try {
-          out.providers = await llm.listProviders();
-        } catch (e) {
-          out.providersError = String(e && e.message);
-        }
-
-        const sel = out.selection;
-        if (sel && sel.provider && sel.model) {
-          try {
-            const info = await llm.resolveModelInfo(sel.provider, sel.model);
-            out.resolved = {
-              provider: sel.provider,
-              model: info.id,
-              name: info.name,
-              inputModalities: info.inputModalities || null,
-              contextWindow: info.context ? info.context.contextWindow : null,
-              reasoning: info.reasoning || null,
-              selectionReasoning: sel.reasoningEffort || null,
-            };
-          } catch (e) {
-            out.resolveError = String((e && e.message) || e);
-          }
-        }
-        send(res, 200, out);
-      } catch (e) {
-        fail(res, 500, String((e && e.message) || e));
-      }
-    },
-  });
-
-  /* AI 抽取：文本/截图 → 待办草案，SSE 流式 */
-  route({
-    kind: 'exact',
-    path: '/api/todo/extract',
-    handler: async (req, res) => {
-      if (!guard(req, res, { mutating: true })) return;
-
-      let body;
-      try {
-        body = await readJson(req, 12 * 1024 * 1024);
-      } catch (e) {
-        return fail(res, 400, 'bad body: ' + e.message);
-      }
-
-      const llm = ctx.get('llm');
-      const attachments = ctx.get('attachments');
-      if (!llm || !attachments) {
-        return fail(res, 503, 'llm / attachments unavailable');
-      }
-
-      const sse = openSse(res);
-      const controller = new AbortController();
-      req.on('close', () => controller.abort());
-
-      try {
-        const selection = currentModel();
-        if (!selection) {
-          sse.event('error', { message: '没有可用模型：DSH 未选默认模型，插件也没保存选择' });
-          return;
-        }
-
-        /* 组装内容块：图片先落到 attachments 拿到 durable ref */
-        const content = [];
-        const note = typeof body.text === 'string' ? body.text.trim() : '';
-        if (note) content.push({ type: 'text', text: note });
-
-        const images = Array.isArray(body.images) ? body.images.slice(0, 4) : [];
-        for (const img of images) {
-          const mediaType = img && img.mediaType ? img.mediaType : 'image/png';
-          const raw = Buffer.from(String((img && img.data) || ''), 'base64');
-          if (!raw.length) continue;
-          const ref = await attachments.saveImage({
-            data: new Uint8Array(raw),
-            mediaType,
-            name: 'todo-shot',
-          });
-          content.push({ type: 'image', attachment: ref });
-        }
-
-        if (!content.length) {
-          sse.event('error', { message: 'empty input: need text or image' });
-          return;
-        }
-
-        sse.event('start', { provider: selection.provider, model: selection.model });
-
-        let text = '';
-        for await (const chunk of llm.stream({
-          provider: selection.provider,
-          model: selection.model,
-          system: extractionPrompt(new Date()),
-          messages: [{ role: 'user', content }],
-          signal: controller.signal,
-        })) {
-          if (chunk.type === 'text-delta') {
-            text += chunk.text;
-            sse.event('delta', { text: chunk.text });
-          } else if (chunk.type === 'finish') {
-            const kind = chunk.reason && chunk.reason.kind ? chunk.reason.kind : 'stop';
-            sse.event('finish', { reason: kind });
-            if (kind === 'error' && chunk.reason.failure) {
-              sse.event('error', { message: chunk.reason.failure.message || 'model error' });
-            }
-          }
-        }
-
-        const parsed = parseExtraction(text);
-        sse.event('done', parsed);
-      } catch (e) {
-        try { sse.event('error', { message: String((e && e.message) || e) }); } catch (x) { /* ignore */ }
-      } finally {
-        sse.close();
-      }
-    },
-  });
 
   /* 可用模型清单（含是否支持图片）*/
   route({
@@ -846,20 +687,4 @@ export async function apply(ctx) {
     },
   });
 
-  /* SSE 通道自检（P2 的抽取流会复用同一套写法） */
-  route({
-    kind: 'exact',
-    path: '/api/todo/stream',
-    handler: (req, res) => {
-      if (!guard(req, res)) return;
-      const sse = openSse(res);
-      let tick = 0;
-      const timer = setInterval(() => {
-        tick += 1;
-        sse.event('tick', { tick, at: Date.now() });
-        if (tick >= 8) { clearInterval(timer); sse.close(); }
-      }, 200);
-      req.on('close', () => clearInterval(timer));
-    },
-  });
 }
