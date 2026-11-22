@@ -78,6 +78,24 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('dbl') >= 0) {
+    var row0 = document.querySelector('.todo-row');
+    if (row0) row0.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    if (location.hash.indexOf('mod') >= 0) {
+      setTimeout(function () {
+        var inp0 = document.querySelector('.todo-edit-title');
+        if (inp0) {
+          var setter0 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          setter0.call(inp0, '改过但没保存的标题');
+          inp0.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        setTimeout(function () {
+          /* 模拟点击编辑区以外 */
+          document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        }, 250);
+      }, 300);
+    }
+  }
   if (location.hash.indexOf('edit') >= 0) {
     var tt = document.querySelector('.todo-row .todo-t');
     if (tt) tt.click();

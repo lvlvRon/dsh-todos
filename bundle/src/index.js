@@ -701,18 +701,28 @@ window.__ModuleLoader__.load({
     /* ============================================================
        行
        ============================================================ */
-    /* 行内编辑：点标题进入，Enter 保存，Esc 取消 */
+    /* 行内编辑：双击进入，Enter 保存，Esc 取消；点外部仅在没有改动时才退出 */
     function EditRow({ t, onSave, onCancel }) {
-      const [d, setD] = React.useState({
+      const initial = React.useMemo(() => ({
         title: t.title || '',
         dueDate: t.dueDate || '',
         dueTime: t.dueTime || '',
         tag: TAG_META[t.tag] ? t.tag : 'work',
         important: Boolean(t.important),
         urgent: Boolean(t.urgent),
-      });
+      }), [t]);
+
+      const [d, setD] = React.useState(initial);
       const [busy, setBusy] = React.useState(false);
+      const boxRef = React.useRef(null);
       const inputRef = React.useRef(null);
+
+      const dirty = d.title !== initial.title
+        || d.dueDate !== initial.dueDate
+        || d.dueTime !== initial.dueTime
+        || d.tag !== initial.tag
+        || d.important !== initial.important
+        || d.urgent !== initial.urgent;
 
       React.useEffect(() => {
         const el = inputRef.current;
@@ -720,6 +730,18 @@ window.__ModuleLoader__.load({
         el.focus();
         el.setSelectionRange(el.value.length, el.value.length);
       }, []);
+
+      /* 点编辑区域以外：没有改动才退出；有改动必须点保存 */
+      React.useEffect(() => {
+        const onDocDown = (e) => {
+          const el = boxRef.current;
+          if (!el || el.contains(e.target)) return;
+          if (dirty) return;
+          onCancel();
+        };
+        document.addEventListener('mousedown', onDocDown);
+        return () => document.removeEventListener('mousedown', onDocDown);
+      }, [dirty, onCancel]);
 
       const patch = (key, value) => setD((prev) => ({ ...prev, [key]: value }));
 
@@ -743,6 +765,7 @@ window.__ModuleLoader__.load({
       };
 
       return h('div', {
+        ref: boxRef,
         className: 'todo-edit',
         onKeyDown: (e) => {
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); }
@@ -776,6 +799,7 @@ window.__ModuleLoader__.load({
             className: 'todo-toggle', 'data-on': d.urgent ? '1' : '0',
             onClick: () => patch('urgent', !d.urgent),
           }, '紧急'),
+          dirty ? h('span', { className: 'todo-edit-dirty' }, '未保存') : null,
           h('div', { className: 'todo-edit-actions' },
             h('button', { className: 'todo-btn-ghost', onClick: onCancel }, '取消'),
             h('button', { className: 'todo-btn-primary', disabled: busy, onClick: save },
@@ -800,14 +824,16 @@ window.__ModuleLoader__.load({
         className: 'todo-row',
         'data-done': t.done ? '1' : '0',
         'data-q': String(q),
+        onDoubleClick: (e) => {
+          const el = e.target;
+          if (el && el.closest && el.closest('.todo-del, .todo-check')) return;
+          onEdit(t.id);
+        },
       },
         h('button', { className: 'todo-check', onClick: () => onToggle(t), 'aria-label': '完成' }),
         h('span', { className: 'todo-prio', 'data-q': String(q), title: importantLabel(q) },
           h('i'), h('i'), h('i'), h('i')),
-        h('span', {
-          className: 'todo-t', title: '点击编辑',
-          onClick: () => onEdit(t.id),
-        }, t.title || '(无标题)'),
+        h('span', { className: 'todo-t', title: '双击编辑' }, t.title || '(无标题)'),
         h('span', { className: 'todo-tag' },
           h('i', { style: { background: tag.color } }), tag.name),
         h('span', { className: 'todo-fill' }),
@@ -1348,6 +1374,7 @@ window.__ModuleLoader__.load({
               h('div', { className: 'todo-help-row' }, '粘贴截图或直接说一句话，会拆成待办草案'),
               h('div', { className: 'todo-help-row' }, '草案卡：缺日期的补完才能创建，创建过的会打 ✓'),
               h('div', { className: 'todo-help-row' }, '列表里勾选即完成，删除有 5 秒撤销'),
+              h('div', { className: 'todo-help-row' }, '双击任意待办进入编辑；改动后需保存或取消才能退出'),
               h('div', { className: 'todo-help-row' }, '输入框：Enter 发送 · Shift+Enter 换行 · Esc 关闭弹层'),
               h('div', { className: 'todo-help-row' }, '顶部两个图标切换列表 / 日历'))
           : null,
