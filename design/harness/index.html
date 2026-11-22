@@ -89,6 +89,12 @@ setTimeout(function () {
   if (location.hash.indexOf('menu') >= 0) {
     var b = document.querySelector('.todo-model-btn');
     if (b) b.click();
+    if (location.hash.indexOf('sub') >= 0) {
+      setTimeout(function () {
+        var row = document.querySelector('.todo-menu-row');
+        if (row) row.click();
+      }, 150);
+    }
   }
   function cs(sel) {
     var el = document.querySelector(sel);

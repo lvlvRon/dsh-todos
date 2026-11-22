@@ -344,13 +344,18 @@ window.__ModuleLoader__.load({
        右侧对话栏（P2 外壳；P3 接 SSE 抽取）
        ============================================================ */
     function ChatPane({
-      messages, busy, draft, onDraft, onSend, models, modelName, menuOpen, onToggleMenu, onPick,
+      messages, busy, draft, onDraft, onSend, models, modelName, chipLabel, effortName,
+      menuOpen, onToggleMenu, onPick,
       attachments, onPasteImages, onRemoveAttachment, onCreateDrafts, ctxInfo, onPreview,
       efforts, onPickEffort,
     }) {
       const threadRef = React.useRef(null);
       const wrapRef = React.useRef(null);
       const fileRef = React.useRef(null);
+      const [menuView, setMenuView] = React.useState('root');
+
+      /* 每次打开菜单都回到根视图 */
+      React.useEffect(() => { if (menuOpen) setMenuView('root'); }, [menuOpen]);
 
       React.useEffect(() => {
         const el = threadRef.current;
@@ -437,37 +442,65 @@ window.__ModuleLoader__.load({
                 h('button', {
                   className: 'todo-model-btn', title: '选择模型',
                   onClick: () => onToggleMenu(!menuOpen),
-                }, modelName),
+                }, chipLabel),
                 menuOpen && models
                   ? h('div', { className: 'todo-model-pop' },
-                      h('button', {
-                        className: 'todo-model-item',
-                        onClick: () => onPick(null, null),
-                      }, '跟随 DSH 默认',
-                        h('span', { className: 'todo-model-badge' },
-                          models.current && models.current.source === 'default' ? '当前' : '推荐')),
-                      ...(efforts && efforts.efforts && efforts.efforts.length
+                      menuView === 'root'
                         ? [
-                            h('div', { key: 'g-eff', className: 'todo-model-group' }, '思考等级'),
-                            ...efforts.efforts.map((e) => h('button', {
-                              key: 'eff-' + e.id,
-                              className: 'todo-model-item',
-                              'data-on': models.current && models.current.reasoningEffort === e.id ? '1' : '0',
-                              onClick: () => onPickEffort(e.id),
-                            }, e.name)),
+                            h('button', {
+                              key: 'r-model', className: 'todo-menu-row',
+                              onClick: () => setMenuView('models'),
+                            },
+                              h('span', null, '模型'),
+                              h('span', { className: 'todo-menu-val' }, modelName, h('i', null, '›'))),
+                            efforts && efforts.efforts && efforts.efforts.length
+                              ? h('button', {
+                                  key: 'r-eff', className: 'todo-menu-row',
+                                  onClick: () => setMenuView('effort'),
+                                },
+                                  h('span', null, '推理等级'),
+                                  h('span', { className: 'todo-menu-val' }, effortName || '默认', h('i', null, '›')))
+                              : null,
+                            h('div', { key: 'r-sep', className: 'todo-menu-sep' }),
+                            h('button', {
+                              key: 'r-default', className: 'todo-menu-row',
+                              onClick: () => onPick(null, null),
+                            },
+                              h('span', null, '跟随 DSH 默认'),
+                              h('span', { className: 'todo-menu-val' },
+                                models.current && models.current.source === 'default' ? '当前' : '')),
                           ]
-                        : []),
-                      ...models.providers.map((p) => [
-                        h('div', { key: 'g-' + p.id, className: 'todo-model-group' }, p.name),
-                        ...(p.models || []).map((m) => h('button', {
-                          key: p.id + '/' + m.id,
-                          className: 'todo-model-item',
-                          'data-on': models.current
-                            && models.current.provider === p.id
-                            && models.current.model === m.id ? '1' : '0',
-                          onClick: () => onPick(p.id, m.id),
-                        }, m.name, m.image ? h('span', { className: 'todo-model-badge' }, '图片') : null)),
-                      ]))
+                        : menuView === 'models'
+                          ? [
+                              h('button', {
+                                key: 'b1', className: 'todo-menu-row todo-menu-back',
+                                onClick: () => setMenuView('root'),
+                              }, '‹ 模型'),
+                              ...models.providers.map((p) => [
+                                h('div', { key: 'g-' + p.id, className: 'todo-model-group' }, p.name),
+                                ...(p.models || []).map((m) => h('button', {
+                                  key: p.id + '/' + m.id,
+                                  className: 'todo-model-item',
+                                  'data-on': models.current
+                                    && models.current.provider === p.id
+                                    && models.current.model === m.id ? '1' : '0',
+                                  onClick: () => onPick(p.id, m.id),
+                                }, m.name, m.image ? h('span', { className: 'todo-model-badge' }, '图片') : null)),
+                              ]),
+                            ]
+                          : [
+                              h('button', {
+                                key: 'b2', className: 'todo-menu-row todo-menu-back',
+                                onClick: () => setMenuView('root'),
+                              }, '‹ 推理等级'),
+                              ...((efforts && efforts.efforts) || []).map((e) => h('button', {
+                                key: 'eff-' + e.id,
+                                className: 'todo-model-item',
+                                'data-on': models.current && models.current.reasoningEffort === e.id ? '1' : '0',
+                                onClick: () => onPickEffort(e.id),
+                              }, e.name)),
+                            ],
+                    )
                   : null,
               ),
               h('span', { className: 'todo-toolrow-spacer' }),
@@ -1022,7 +1055,7 @@ window.__ModuleLoader__.load({
           h(ChatPane, {
             messages, busy: chatBusy, draft: chatDraft,
             onDraft: setChatDraft, onSend: sendChat,
-            models, modelName: chipLabel, menuOpen: modelMenu,
+            models, modelName, chipLabel, effortName, menuOpen: modelMenu,
             onToggleMenu: setModelMenu, onPick: pickModel,
             efforts, onPickEffort: pickEffort,
             attachments,
