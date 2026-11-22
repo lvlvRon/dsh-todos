@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Host 半：待办插件。
  *
  * P1：真实数据层 —— 存储域 + 增删改查路由。
@@ -595,11 +595,13 @@ export async function apply(ctx) {
           {
             role: 'user',
             text: text || '（截图）',
+            at: Date.now(),
             images: imageRefs.length ? imageRefs : null,
           },
           {
             role: 'assistant',
             text: prose,
+            at: Date.now(),
             drafts: tasks && tasks.tasks && tasks.tasks.length ? tasks.tasks : null,
             missing: tasks && tasks.missing && tasks.missing.length ? tasks.missing : null,
             ask: ask && ask.options && ask.options.length ? ask.options : null,

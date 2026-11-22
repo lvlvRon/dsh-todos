@@ -117,19 +117,39 @@ function brief(today, todos) {
   return `共 ${todos.length} 条：未完成 ${open.length}（其中逾期 ${overdue.length}、今天到期 ${todayCount.length}），已完成 ${todos.length - open.length}。`;
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+/** 消息时间戳：MM-DD HH:mm */
+function stamp(at) {
+  if (!at) return '时间未知';
+  const d = new Date(at);
+  return pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
 export function buildSystemPrompt({ now, todos, summary, transcript, userProfile }) {
-  const pad = (n) => String(n).padStart(2, '0');
-  const today = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  const today = now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
+  const clock = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+
   const parts = [
     PERSONA,
-    `【时间】今天是 ${today} ${WEEK_CN[now.getDay()]}（Asia/Shanghai）。所有相对日期都按这一天换算。`,
+    `【时间】现在是 ${today} ${WEEK_CN[now.getDay()]} ${clock}（Asia/Shanghai）。`
+      + '未加限定的日期时间都按这个时区和这一刻解释。',
     `【待办库】${brief(today, todos)}\n具体条目不要凭上下文猜 —— 需要时调用 query_todos 查。`,
   ];
   if (summary) parts.push(`【你记得的事】\n${summary}`);
+
   if (transcript && transcript.length) {
-    parts.push('【最近对话】\n' + transcript
-      .map((m) => (m.role === 'user' ? '用户：' : '你：') + m.text)
-      .join('\n'));
+    const last = transcript[transcript.length - 1];
+    const gapMs = last && last.at ? now.getTime() - last.at : 0;
+    const gapNote = gapMs > 6 * 3600 * 1000
+      ? `\n（距上一条消息已过 ${Math.floor(gapMs / 3600000)} 小时 —— 之前提到的"明天/今天"要按那条消息的时间理解，不是现在。）`
+      : '';
+    parts.push('【最近对话】（每行开头是该消息发出的时间）' + gapNote + '\n'
+      + transcript
+        .map((m) => '[' + stamp(m.at) + '] ' + (m.role === 'user' ? '用户：' : '你：') + m.text)
+        .join('\n'));
   }
   if (userProfile) parts.push(`【用户偏好】\n${userProfile}`);
   return parts.join('\n\n');

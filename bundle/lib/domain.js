@@ -61,6 +61,7 @@ export const conversationSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     text: z.string(),
+    at: z.number().nullish(),
     images: z.array(imageRefSchema).nullish(),
     drafts: z.array(draftTaskSchema).nullish(),
     missing: z.array(z.string()).nullish(),
