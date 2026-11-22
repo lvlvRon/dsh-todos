@@ -229,6 +229,14 @@ select.todo-field{max-width:62px}
 .todo-when[data-over="1"]{background:rgba(229,72,77,.12);color:var(--dsw-alias-state-error-primary)}
 .todo-del{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:0;pointer-events:none;width:26px;height:26px;border-radius:6px;border:none;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;display:grid;place-items:center}
 .todo-row:hover .todo-del{opacity:1;pointer-events:auto}
+/* ---- 行内编辑 ---- */
+.todo-edit{display:flex;flex-direction:column;gap:6px;padding:9px 11px;border:1px solid var(--td-accent-ring);border-radius:9px;background:var(--td-accent-weak);margin:3px 0}
+.todo-edit-title{width:100%;border:none;background:none;font-family:inherit;font-size:14px;font-weight:500;color:var(--dsw-alias-label-primary);outline:none;padding:1px 0}
+.todo-edit-fields{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.todo-edit-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
+.todo-btn-ghost{border:1px solid var(--dsw-alias-border-l1);background:none;border-radius:7px;font-size:12px;padding:3px 10px;cursor:pointer;font-family:inherit;color:var(--dsw-alias-label-secondary)}
+.todo-btn-ghost:hover{background:var(--td-hover);color:var(--dsw-alias-label-primary)}
+.todo-t{cursor:text}
 .todo-row:hover .todo-when{opacity:0}
 .todo-del:hover{background:var(--td-chip-bg);color:var(--dsw-alias-state-error-primary)}
 .todo-empty{padding:56px 0;text-align:center;color:var(--dsw-alias-label-secondary);font-size:13px}

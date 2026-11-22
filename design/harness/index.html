@@ -78,6 +78,10 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('edit') >= 0) {
+    var tt = document.querySelector('.todo-row .todo-t');
+    if (tt) tt.click();
+  }
   if (location.hash.indexOf('img') >= 0) {
     var cv = document.createElement('canvas');
     cv.width = 240; cv.height = 160;

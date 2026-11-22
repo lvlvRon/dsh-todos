@@ -701,7 +701,90 @@ window.__ModuleLoader__.load({
     /* ============================================================
        行
        ============================================================ */
-    function Row({ t, onToggle, onDelete }) {
+    /* 行内编辑：点标题进入，Enter 保存，Esc 取消 */
+    function EditRow({ t, onSave, onCancel }) {
+      const [d, setD] = React.useState({
+        title: t.title || '',
+        dueDate: t.dueDate || '',
+        dueTime: t.dueTime || '',
+        tag: TAG_META[t.tag] ? t.tag : 'work',
+        important: Boolean(t.important),
+        urgent: Boolean(t.urgent),
+      });
+      const [busy, setBusy] = React.useState(false);
+      const inputRef = React.useRef(null);
+
+      React.useEffect(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      }, []);
+
+      const patch = (key, value) => setD((prev) => ({ ...prev, [key]: value }));
+
+      const save = async () => {
+        const title = d.title.trim();
+        if (!title || busy) return;
+        setBusy(true);
+        try {
+          await onSave({
+            ...t,
+            title,
+            dueDate: d.dueDate || null,
+            dueTime: d.dueTime || null,
+            tag: d.tag,
+            important: d.important,
+            urgent: d.urgent,
+          });
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      return h('div', {
+        className: 'todo-edit',
+        onKeyDown: (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); }
+          else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        },
+      },
+        h('input', {
+          ref: inputRef, className: 'todo-edit-title', value: d.title,
+          placeholder: '待办内容',
+          onChange: (e) => patch('title', e.target.value),
+        }),
+        h('div', { className: 'todo-edit-fields' },
+          h('input', {
+            className: 'todo-field', type: 'date', value: d.dueDate,
+            onChange: (e) => patch('dueDate', e.target.value),
+          }),
+          h('input', {
+            className: 'todo-field', type: 'time', value: d.dueTime,
+            style: { maxWidth: '78px' },
+            onChange: (e) => patch('dueTime', e.target.value),
+          }),
+          h('select', {
+            className: 'todo-field', value: d.tag,
+            onChange: (e) => patch('tag', e.target.value),
+          }, ...Object.entries(TAG_META).map(([k, v]) => h('option', { key: k, value: k }, v.name))),
+          h('button', {
+            className: 'todo-toggle', 'data-on': d.important ? '1' : '0',
+            onClick: () => patch('important', !d.important),
+          }, '重要'),
+          h('button', {
+            className: 'todo-toggle', 'data-on': d.urgent ? '1' : '0',
+            onClick: () => patch('urgent', !d.urgent),
+          }, '紧急'),
+          h('div', { className: 'todo-edit-actions' },
+            h('button', { className: 'todo-btn-ghost', onClick: onCancel }, '取消'),
+            h('button', { className: 'todo-btn-primary', disabled: busy, onClick: save },
+              busy ? '保存中…' : '保存')),
+        ),
+      );
+    }
+
+    function Row({ t, onToggle, onDelete, editing, onEdit, onSave, onCancelEdit }) {
       const q = t.important && t.urgent ? 1 : t.important ? 2 : t.urgent ? 3 : 4;
       const tag = TAG_META[t.tag] || TAG_META.work;
       const isOverdue = t.dueDate && !t.done && t.dueDate < ymd(new Date());
@@ -709,11 +792,18 @@ window.__ModuleLoader__.load({
         ? t.dueTime
         : (t.dueDate ? t.dueDate.slice(5).replace('-', '/') : '');
 
+      if (editing) {
+        return h(EditRow, { t, onSave, onCancel: onCancelEdit });
+      }
+
       return h('div', { className: 'todo-row', 'data-done': t.done ? '1' : '0' },
         h('button', { className: 'todo-check', onClick: () => onToggle(t), 'aria-label': '完成' }),
         h('span', { className: 'todo-prio', 'data-q': String(q), title: importantLabel(q) },
           h('i'), h('i'), h('i'), h('i')),
-        h('span', { className: 'todo-t' }, t.title || '(无标题)'),
+        h('span', {
+          className: 'todo-t', title: '点击编辑',
+          onClick: () => onEdit(t.id),
+        }, t.title || '(无标题)'),
         h('span', { className: 'todo-tag' },
           h('i', { style: { background: tag.color } }), tag.name),
         h('span', { className: 'todo-fill' }),
@@ -746,6 +836,7 @@ window.__ModuleLoader__.load({
       const [search, setSearch] = React.useState(null);
       const [helpOpen, setHelpOpen] = React.useState(false);
       const [chatCollapsed, setChatCollapsed] = React.useState(false);
+      const [editingId, setEditingId] = React.useState(null);
 
       /* —— 对话（P2 外壳，尚未接模型）—— */
       const [messages, setMessages] = React.useState([]);
@@ -946,6 +1037,19 @@ window.__ModuleLoader__.load({
           setToast({ text: '清空失败：' + ((e && e.message) || e) });
         }
       }, []);
+
+      const saveEdit = React.useCallback(async (next) => {
+        setEditingId(null);
+        setTodos((prev) => (prev || []).map((x) => (x.id === next.id ? { ...x, ...next } : x)));
+        try {
+          await api('POST', 'upsert', { todo: next });
+          await load();
+          setToast({ text: '已更新「' + next.title + '」' });
+        } catch (e) {
+          setToast({ text: '更新失败：' + ((e && e.message) || e) });
+          await load();
+        }
+      }, []);   /* load 声明在后面，调用时已初始化 */
 
       const createDrafts = React.useCallback(async (items) => {
         const done = [];
@@ -1290,7 +1394,16 @@ window.__ModuleLoader__.load({
               : groups.map((g) => h('div', { key: g.key, className: 'todo-group' },
                   h('div', { className: 'todo-gh', 'data-alert': g.alert ? '1' : '0' },
                     h('span', null, g.label), h('em', null, g.items.length), h('i')),
-                  ...g.items.map((t) => h(Row, { key: t.id, t, onToggle: toggle, onDelete: remove })),
+                  ...g.items.map((t) => h(Row, {
+                    key: t.id,
+                    t,
+                    onToggle: toggle,
+                    onDelete: remove,
+                    editing: editingId === t.id,
+                    onEdit: (id) => setEditingId(id),
+                    onSave: saveEdit,
+                    onCancelEdit: () => setEditingId(null),
+                  })),
                 ))),
       );
 
