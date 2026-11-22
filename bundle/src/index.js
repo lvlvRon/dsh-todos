@@ -851,6 +851,8 @@ window.__ModuleLoader__.load({
               id: 'h' + i,
               role: m.role === 'user' ? 'user' : 'ai',
               text: m.text,
+              images: (m.images || []).map((x) => x.url
+                || ('/api/todo/shot?ref=' + encodeURIComponent(x.id))),
             })));
           })
           .catch(() => { /* 读不到就保持空 */ });

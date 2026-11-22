@@ -34,11 +34,23 @@ export const settingsSchema = z.object({
   reasoningEffort: z.string().nullish(),
 });
 
+/** 图片附件引用（DSH attachments 的 ImageAttachmentRef） */
+export const imageRefSchema = z.object({
+  attachmentId: z.string(),
+  mediaType: z.string(),
+  bytes: z.number(),
+  width: z.number(),
+  height: z.number(),
+  name: z.string().nullish(),
+  originalDimensions: z.object({ width: z.number(), height: z.number() }).nullish(),
+});
+
 /** 单会话的对话记录 + 滚动摘要 */
 export const conversationSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     text: z.string(),
+    images: z.array(imageRefSchema).nullish(),
   })),
   summary: z.string().nullish(),
   updatedAt: z.number(),

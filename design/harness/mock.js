@@ -80,7 +80,11 @@
         messages: [
           { role: 'user', text: '明天下午三点跟王工对接口' },
           { role: 'assistant', text: '记下了：明天 15:00 跟王工对接口。需要我提前 20 分钟提醒吗？' },
-          { role: 'user', text: '好，另外周五前把报价单发出去' },
+          {
+            role: 'user',
+            text: '（截图）',
+            images: [{ url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAWklEQVR42u3PMQEAAAgDoC251a3gLwSgOXLVkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkqRPCx4AAW0WefkAAAAASUVORK5CYII=' }],
+          },
           { role: 'assistant', text: '好。报价单放到周五，今天先不碰它。这周你已经有 4 件事，注意别挤在一起。' },
         ],
         total: 4,

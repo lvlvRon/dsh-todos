@@ -482,6 +482,7 @@ export async function apply(ctx) {
         const images = Array.isArray(body.images) ? body.images.slice(0, 4) : [];
 
         const content = [];
+        const imageRefs = [];
         if (text) content.push({ type: 'text', text });
         for (const img of images) {
           const raw = Buffer.from(String((img && img.data) || ''), 'base64');
@@ -492,6 +493,7 @@ export async function apply(ctx) {
             name: 'todo-shot',
           });
           content.push({ type: 'image', attachment: ref });
+          imageRefs.push(ref);
         }
         if (!content.length) {
           sse.event('error', { message: 'empty input: need text or image' });
@@ -544,7 +546,11 @@ export async function apply(ctx) {
 
         const messages = [
           ...(conv.messages || []),
-          { role: 'user', text: text || '（截图）' },
+          {
+            role: 'user',
+            text: text || '（截图）',
+            images: imageRefs.length ? imageRefs : null,
+          },
           { role: 'assistant', text: prose },
         ].slice(-200);
         await conversations.put(CONV_KEY, {
@@ -626,11 +632,55 @@ export async function apply(ctx) {
       const conv = conversations.get(CONV_KEY) || { messages: [], summary: null, updatedAt: null };
       send(res, 200, {
         ok: true,
-        messages: (conv.messages || []).slice(-60),
+        messages: (conv.messages || []).slice(-60).map((m) => ({
+          role: m.role,
+          text: m.text,
+          images: (m.images || []).map((r) => ({
+            id: r.attachmentId,
+            width: r.width,
+            height: r.height,
+          })),
+        })),
         total: (conv.messages || []).length,
         summary: conv.summary || null,
         updatedAt: conv.updatedAt || null,
       });
+    },
+  });
+
+  /* 取图：按对话记录里的引用读回原始字节 */
+  route({
+    kind: 'exact',
+    path: '/api/todo/shot',
+    handler: async (req, res) => {
+      if (!guard(req, res)) return;
+      const attachments = ctx.get('attachments');
+      if (!attachments) return fail(res, 503, 'attachments unavailable');
+      try {
+        const url = new URL(req.url, 'http://localhost');
+        const id = url.searchParams.get('ref');
+        if (!id) return fail(res, 400, 'ref is required');
+
+        const conv = conversations.get(CONV_KEY);
+        let ref = null;
+        for (const m of (conv && conv.messages) || []) {
+          for (const r of m.images || []) {
+            if (r && r.attachmentId === id) ref = r;
+          }
+        }
+        if (!ref) return fail(res, 404, 'image not found in conversation');
+
+        const stored = await attachments.readImage(ref);
+        const buf = Buffer.from(stored.data);
+        res.writeHead(200, {
+          'content-type': (stored.ref && stored.ref.mediaType) || ref.mediaType || 'application/octet-stream',
+          'content-length': buf.length,
+          'cache-control': 'public, max-age=31536000, immutable',
+        });
+        res.end(buf);
+      } catch (e) {
+        fail(res, 500, 'read image failed: ' + (e && e.message));
+      }
     },
   });
 
