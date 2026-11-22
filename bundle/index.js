@@ -20,6 +20,37 @@ const LOG_FILE = new URL('./probe.log', import.meta.url);
 
 const WEEK_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
+const modelInfoCache = new Map();
+
+/** 模型上下文窗口（带缓存） */
+async function contextWindowOf(llm, provider, model) {
+  const key = provider + '/' + model;
+  if (modelInfoCache.has(key)) return modelInfoCache.get(key);
+  let total = 0;
+  try {
+    const info = await llm.resolveModelInfo(provider, model);
+    total = info && info.context ? info.context.contextWindow : 0;
+  } catch (e) {
+    total = 0;
+  }
+  modelInfoCache.set(key, total);
+  return total;
+}
+
+/** 粗算 token 估算：中日韩字符约 1.5 字/token，ASCII 约 4 字/token */
+function estimateTokens(texts) {
+  let cjk = 0;
+  let ascii = 0;
+  for (const t of texts) {
+    if (typeof t !== 'string') continue;
+    for (const ch of t) {
+      if (ch.codePointAt(0) > 255) cjk += 1;
+      else ascii += 1;
+    }
+  }
+  return Math.ceil(cjk / 1.5 + ascii / 4);
+}
+
 /** 抽取用的系统提示：要求模型只吐 JSON，并把相对日期换算成绝对日期 */
 function extractionPrompt(now) {
   const pad = (n) => String(n).padStart(2, '0');
@@ -431,7 +462,15 @@ export async function apply(ctx) {
           transcript: (conv.messages || []).slice(-HISTORY_LIMIT),
         });
 
-        sse.event('start', { provider: selection.provider, model: selection.model });
+        const textParts = [system, ...content.filter((c) => c.type === 'text').map((c) => c.text)];
+        const usedTokens = estimateTokens(textParts) + images.length * 800;
+        const totalTokens = await contextWindowOf(llm, selection.provider, selection.model);
+
+        sse.event('start', {
+          provider: selection.provider,
+          model: selection.model,
+          context: { used: usedTokens, total: totalTokens },
+        });
 
         let acc = '';
         let sent = 0;

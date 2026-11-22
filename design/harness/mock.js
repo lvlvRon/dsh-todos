@@ -143,6 +143,11 @@
       let i = 0;
       const stream = new ReadableStream({
         start(c) {
+          c.enqueue(enc.encode('event: start\ndata: ' + JSON.stringify({
+            provider: 'opencode-go-live',
+            model: 'deepseek-v4.1-flash',
+            context: { used: 18300, total: 1000000 },
+          }) + '\n\n'));
           const timer = setInterval(() => {
             if (phase === 0) {
               if (i < block.length) {

@@ -1,4 +1,4 @@
-﻿import stylesText from './styles.css';
+import stylesText from './styles.css';
 /**
  * Client 半：待办面板（P2 —— 列表视图接真数据）。
  *
@@ -319,14 +319,37 @@ window.__ModuleLoader__.load({
     }
 
     /* ============================================================
+       上下文占用环
+       ============================================================ */
+    function CtxRing({ used, total }) {
+      const pct = total > 0 ? Math.min(1, used / total) : 0;
+      const r = 7;
+      const c = 2 * Math.PI * r;
+      const label = pct <= 0 ? '0%' : (pct < 0.01 ? '<1%' : Math.round(pct * 100) + '%');
+      return h('span', {
+        className: 'todo-ctx',
+        title: '上下文占用 ' + (pct * 100).toFixed(1) + '%（约 ' + used + ' / ' + total + ' tokens）',
+      },
+        h('svg', { viewBox: '0 0 18 18', width: 16, height: 16 },
+          h('circle', { cx: 9, cy: 9, r, fill: 'none', stroke: 'var(--dsw-alias-border-l2)', strokeWidth: 2 }),
+          h('circle', {
+            cx: 9, cy: 9, r, fill: 'none', stroke: 'var(--td-accent)', strokeWidth: 2,
+            strokeDasharray: String(c), strokeDashoffset: String(c * (1 - pct)),
+            strokeLinecap: 'round', transform: 'rotate(-90 9 9)',
+          })),
+        h('span', null, label));
+    }
+
+    /* ============================================================
        右侧对话栏（P2 外壳；P3 接 SSE 抽取）
        ============================================================ */
     function ChatPane({
       messages, busy, draft, onDraft, onSend, models, modelName, menuOpen, onToggleMenu, onPick,
-      attachments, onPasteImages, onRemoveAttachment, onCreateDrafts,
+      attachments, onPasteImages, onRemoveAttachment, onCreateDrafts, ctxInfo,
     }) {
       const threadRef = React.useRef(null);
       const wrapRef = React.useRef(null);
+      const fileRef = React.useRef(null);
 
       React.useEffect(() => {
         const el = threadRef.current;
@@ -386,14 +409,20 @@ window.__ModuleLoader__.load({
               },
             }),
             h('div', { className: 'todo-toolrow' },
-              h('button', { className: 'todo-icon-btn', title: '添加图片（P3 接入）' },
-                h('svg', {
-                  viewBox: '0 0 24 24', width: 15, height: 15, fill: 'none',
-                  stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round',
+              h('button', {
+                className: 'todo-round-btn', title: '添加图片',
+                onClick: () => { if (fileRef.current) fileRef.current.click(); },
+              }, '+'),
+              h('input', {
+                ref: fileRef, type: 'file', accept: 'image/*', multiple: true,
+                style: { display: 'none' },
+                onChange: (e) => {
+                  const files = [...((e.target && e.target.files) || [])];
+                  if (files.length) onPasteImages(files);
+                  e.target.value = '';
                 },
-                  h('rect', { x: 3.5, y: 4.5, width: 17, height: 15, rx: 2.5 }),
-                  h('circle', { cx: 9, cy: 10, r: 1.6 }),
-                  h('path', { d: 'M4.5 17l4.2-4.2 3.6 3.6 2.6-2.4 4.6 4.4' }))),
+              }),
+              h('span', { className: 'todo-toolrow-spacer' }),
               h('div', { className: 'todo-model-wrap', ref: wrapRef },
                 h('button', {
                   className: 'todo-model-btn', title: '选择模型',
@@ -420,7 +449,8 @@ window.__ModuleLoader__.load({
                       ]))
                   : null,
               ),
-              h('span', { className: 'todo-hint' }, 'Enter 发送'),
+              h('span', { className: 'todo-toolrow-spacer' }),
+              ctxInfo ? h(CtxRing, { used: ctxInfo.used, total: ctxInfo.total }) : null,
               h('button', {
                 className: 'todo-send', onClick: onSend,
                 disabled: busy || (!draft.trim() && !(attachments && attachments.length)),
@@ -485,6 +515,7 @@ window.__ModuleLoader__.load({
       const [messages, setMessages] = React.useState([]);
       const [chatDraft, setChatDraft] = React.useState('');
       const [chatBusy, setChatBusy] = React.useState(false);
+      const [ctxInfo, setCtxInfo] = React.useState(null);
       const [models, setModels] = React.useState(null);
       const [modelMenu, setModelMenu] = React.useState(false);
 
@@ -582,7 +613,9 @@ window.__ModuleLoader__.load({
 
           let acc = '';
           await readSse(res, (ev, payload) => {
-            if (ev === 'delta' && payload && payload.text) {
+            if (ev === 'start' && payload && payload.context) {
+              setCtxInfo(payload.context);
+            } else if (ev === 'delta' && payload && payload.text) {
               acc += payload.text;
               setMessages((m) => m.map((x) => (x.id === aid ? { ...x, text: acc } : x)));
             } else if (ev === 'draft' && payload) {
@@ -917,6 +950,7 @@ window.__ModuleLoader__.load({
             onPasteImages,
             onRemoveAttachment: (i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i)),
             onCreateDrafts: createDrafts,
+            ctxInfo,
           }),
         ),
         toast ? h('div', { className: 'todo-toast' },
