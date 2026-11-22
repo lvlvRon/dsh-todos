@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Host 半：待办插件。
  *
  * P1：真实数据层 —— 存储域 + 增删改查路由。
@@ -364,6 +364,7 @@ export async function apply(ctx) {
         let acc = '';
         let sent = 0;
         let rounds = 0;
+        const usedTools = [];
         const convo = [{ role: 'user', content }];
         const pad2 = (n) => String(n).padStart(2, '0');
         const todayStr = new Date().getFullYear() + '-' + pad2(new Date().getMonth() + 1) + '-' + pad2(new Date().getDate());
@@ -414,6 +415,7 @@ export async function apply(ctx) {
             if (call.name === 'query_todos') {
               result = runTodoQuery([...table.entries()], call.arguments, todayStr);
             }
+            usedTools.push({ name: call.name, count: result.count });
             sse.event('tool', { name: call.name, count: result.count });
             convo.push({
               id: 't_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
@@ -443,6 +445,7 @@ export async function apply(ctx) {
             role: 'assistant',
             text: prose,
             at: Date.now(),
+            tools: usedTools.length ? usedTools : null,
             drafts: tasks && tasks.tasks && tasks.tasks.length ? tasks.tasks : null,
             missing: tasks && tasks.missing && tasks.missing.length ? tasks.missing : null,
             ask: ask && ask.options && ask.options.length ? ask.options : null,
@@ -558,6 +561,7 @@ export async function apply(ctx) {
           drafts: m.drafts || null,
           missing: m.missing || null,
           ask: m.ask || null,
+          tools: m.tools || null,
         })),
         total: (conv.messages || []).length,
         summary: conv.summary || null,
@@ -614,6 +618,82 @@ export async function apply(ctx) {
         send(res, 200, { ok: true });
       } catch (e) {
         fail(res, 500, 'clear failed: ' + (e && e.message));
+      }
+    },
+  });
+
+  /* 导出：待办 + 重要日期，含已完成 */
+  route({
+    kind: 'exact',
+    path: '/api/todo/export',
+    handler: (req, res) => {
+      if (!guard(req, res)) return;
+      const payload = {
+        format: 'dsh-plugin-todo',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        todos: listAll(),
+        events: [...events.entries()].map(([, v]) => v),
+      };
+      res.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'content-disposition': 'attachment; filename="dsh-todos.json"',
+        'cache-control': 'no-store',
+      });
+      res.end(JSON.stringify(payload, null, 2));
+    },
+  });
+
+  /* 导入：按 id 合并（有则覆盖，无则新增） */
+  route({
+    kind: 'exact',
+    path: '/api/todo/import',
+    handler: async (req, res) => {
+      if (!guard(req, res, { mutating: true })) return;
+      try {
+        const body = await readJson(req, 16 * 1024 * 1024);
+        const list = Array.isArray(body.todos) ? body.todos
+          : (body.payload && Array.isArray(body.payload.todos) ? body.payload.todos : null);
+        if (!list) return fail(res, 400, '缺少 todos 数组');
+
+        let added = 0;
+        let updated = 0;
+        let skipped = 0;
+        for (const raw of list.slice(0, 5000)) {
+          try {
+            if (!raw || typeof raw !== 'object') { skipped += 1; continue; }
+            const previous = raw.id ? table.get(raw.id) : undefined;
+            const todo = normalize(raw, previous);
+            if (!todo.title) { skipped += 1; continue; }
+            await table.put(todo.id, todo);
+            if (previous) updated += 1; else added += 1;
+          } catch (e) {
+            skipped += 1;
+          }
+        }
+
+        const evList = Array.isArray(body.events) ? body.events
+          : (body.payload && Array.isArray(body.payload.events) ? body.payload.events : []);
+        let eventsAdded = 0;
+        for (const raw of evList.slice(0, 500)) {
+          try {
+            if (!raw || !raw.label || !raw.cal || !raw.month || !raw.day) continue;
+            const id = raw.id || ('e_' + Math.random().toString(36).slice(2, 10));
+            await events.put(id, {
+              id,
+              label: String(raw.label),
+              cal: raw.cal === 'lunar' ? 'lunar' : 'solar',
+              month: Number(raw.month),
+              day: Number(raw.day),
+              leap: raw.cal === 'lunar' ? Boolean(raw.leap) : null,
+            });
+            eventsAdded += 1;
+          } catch (e) { /* 跳过坏条目 */ }
+        }
+
+        send(res, 200, { ok: true, added, updated, skipped, eventsAdded });
+      } catch (e) {
+        fail(res, 400, '导入失败：' + (e && e.message));
       }
     },
   });

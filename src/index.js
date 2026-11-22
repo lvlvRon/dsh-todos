@@ -117,10 +117,11 @@ window.__ModuleLoader__.load({
     }
 
     const PERIODS = [
-      { id: 'today', label: '今天', kinds: ['overdue', 'today'] },
-      { id: 'week', label: '本周', kinds: ['overdue', 'today', 'week'] },
-      { id: 'month', label: '本月', kinds: ['overdue', 'today', 'week', 'later'] },
-      { id: 'all', label: '全部', kinds: null },
+      /* maxDays：截止日在「今天 + N 天」以内（含逾期）；minDays：更远或未排期 */
+      { id: 'today', label: '今天', maxDays: 0 },
+      { id: 'd3', label: '三天内', maxDays: 3 },
+      { id: 'd7', label: '7天内', maxDays: 7 },
+      { id: 'later', label: '以后', minDays: 8 },
       { id: 'done', label: '已完成', doneOnly: true },
     ];
 
@@ -853,12 +854,10 @@ window.__ModuleLoader__.load({
       const isOverdue = Boolean(t.dueDate) && !t.done && t.dueDate < todayKey;
       /* 临近只是显示信号：不进象限，只给时间标签上色 */
       const isSoon = !t.done && !isOverdue && daysLeft !== null && daysLeft >= 0 && daysLeft <= 2;
-      const when = t.dueTime
-        ? t.dueTime
-        : (daysLeft === 0 ? '今天'
-          : daysLeft === 1 ? '明天'
-            : daysLeft === 2 ? '后天'
-              : (t.dueDate ? t.dueDate.slice(5).replace('-', '/') : ''));
+      /* 一律显示日期；有具体时间则日期 + 时间 */
+      const dateLabel = t.dueDate ? t.dueDate.slice(5).replace('-', '/') : '';
+      const when = [dateLabel, t.dueTime].filter(Boolean).join(' ');
+      const fullWhen = t.dueDate ? t.dueDate + (t.dueTime ? ' ' + t.dueTime : '') : '';
 
       if (editing) {
         return h(EditRow, { t, onSave, onCancel: onCancelEdit });
@@ -883,6 +882,7 @@ window.__ModuleLoader__.load({
         h('span', { className: 'todo-fill' }),
         when ? h('span', {
           className: 'todo-when',
+          title: fullWhen,
           'data-hot': t.dueTime ? '1' : '0',
           'data-over': isOverdue ? '1' : '0',
           'data-soon': isSoon ? '1' : '0',
@@ -906,6 +906,59 @@ window.__ModuleLoader__.load({
       const [period, setPeriod] = React.useState('today');
       const [tagFilter, setTagFilter] = React.useState('all');
       const [creating, setCreating] = React.useState(false);
+      const importRef = React.useRef(null);
+      const dataWrapRef = React.useRef(null);
+      const [dataMenu, setDataMenu] = React.useState(false);
+
+      /* 导入导出菜单：点外部关闭 */
+      React.useEffect(() => {
+        if (!dataMenu) return undefined;
+        const onDoc = (e) => {
+          if (dataWrapRef.current && dataWrapRef.current.contains(e.target)) return;
+          setDataMenu(false);
+        };
+        document.addEventListener('mousedown', onDoc);
+        return () => document.removeEventListener('mousedown', onDoc);
+      }, [dataMenu]);
+
+      /* 导出全部待办（含已完成）为 JSON 文件 */
+      const exportTodos = async () => {
+        try {
+          const res = await fetch('/api/todo/export', { headers: { 'x-dsh-todo': '1' } });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const text = await res.text();
+          const payload = JSON.parse(text);
+          const blob = new Blob([text], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'dsh-todos-' + ymd(new Date()) + '.json';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          setToast({ text: '已导出 ' + (payload.todos ? payload.todos.length : 0) + ' 条待办' });
+        } catch (e) {
+          setToast({ text: '导出失败：' + ((e && e.message) || e) });
+        }
+      };
+
+      /* 导入：按 id 合并，已存在的覆盖，不存在的新增 */
+      const importTodos = async (file) => {
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          const d = await api('POST', 'import', data);
+          setToast({
+            text: '导入完成：新增 ' + d.added + ' 条，更新 ' + d.updated + ' 条'
+              + (d.skipped ? '，跳过 ' + d.skipped + ' 条' : '')
+              + (d.eventsAdded ? '，重要日期 ' + d.eventsAdded + ' 个' : ''),
+          });
+          await load();
+        } catch (e) {
+          setToast({ text: '导入失败：' + ((e && e.message) || e) });
+        }
+      };
       const [toast, setToast] = React.useState(null);
       const [search, setSearch] = React.useState(null);
       const [helpOpen, setHelpOpen] = React.useState(false);
@@ -938,6 +991,7 @@ window.__ModuleLoader__.load({
                 drafts: m.drafts && m.drafts.length ? m.drafts : null,
                 ready: true,
                 ask: m.ask && m.ask.length ? m.ask : null,
+                tools: m.tools && m.tools.length ? m.tools : null,
                 chosen,
               };
             });
@@ -1232,11 +1286,24 @@ window.__ModuleLoader__.load({
       const decorated = (todos || []).map((t) => ({ ...t, _kind: groupOf(t, todayStr, weekEnd) }));
 
       const periodDef = PERIODS.find((p) => p.id === period) || PERIODS[0];
-      let visible = decorated;
-      if (periodDef.doneOnly) visible = decorated.filter((t) => t.done);
-      else if (periodDef.kinds) visible = decorated.filter((t) => periodDef.kinds.includes(t._kind));
-      if (periodDef.id === 'month') visible = visible.filter((t) => !t.dueDate || (t.dueDate >= todayStr.slice(0, 8) + '01' && t.dueDate <= monthEnd));
-      if (tagFilter !== 'all') visible = visible.filter((t) => t.tag === tagFilter);
+      const daysLeftOf = (t) => (t.dueDate
+        ? Math.round((Date.parse(t.dueDate) - Date.parse(todayStr)) / 86400000)
+        : null);
+
+      let visible;
+      if (periodDef.doneOnly) {
+        visible = decorated.filter((t) => t.done);
+      } else {
+        visible = decorated.filter((t) => !t.done);
+        if (periodDef.maxDays !== undefined) {
+          visible = visible.filter((t) => {
+            if (!t.dueDate) return false;              // 未排期不进范围内视图
+            return daysLeftOf(t) <= periodDef.maxDays;  // 逾期为负数，自然包含在内
+          });
+        } else if (periodDef.minDays !== undefined) {
+          visible = visible.filter((t) => !t.dueDate || daysLeftOf(t) >= periodDef.minDays);
+        }
+      }      if (tagFilter !== 'all') visible = visible.filter((t) => t.tag === tagFilter);
       const keyword = (search || '').trim().toLowerCase();
       if (keyword) {
         visible = visible.filter((t) => (t.title || '').toLowerCase().includes(keyword)
@@ -1364,6 +1431,42 @@ window.__ModuleLoader__.load({
             })
           : null,
         h('div', { className: 'todo-tools' },
+          h('div', { className: 'todo-data-wrap', ref: dataWrapRef },
+            h('button', {
+              className: 'todo-tool', title: '导入 / 导出', 'data-on': dataMenu ? '1' : '0',
+              onClick: () => setDataMenu((v) => !v),
+            },
+              h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' },
+                h('path', { d: 'M8 9.5L12 5.5l4 4' }),
+                h('path', { d: 'M12 5.5v13' }),
+                h('path', { d: 'M8 14.5l4 4 4-4' }))),
+            dataMenu
+              ? h('div', { className: 'todo-data-pop' },
+                  h('button', {
+                    className: 'todo-menu-row',
+                    onClick: () => { setDataMenu(false); exportTodos(); },
+                  },
+                    h('span', null, '导出待办'),
+                    h('span', { className: 'todo-menu-val' }, '含已完成')),
+                  h('button', {
+                    className: 'todo-menu-row',
+                    onClick: () => {
+                      setDataMenu(false);
+                      if (importRef.current) importRef.current.click();
+                    },
+                  },
+                    h('span', null, '导入待办'),
+                    h('span', { className: 'todo-menu-val' }, 'JSON')))
+              : null),
+          h('input', {
+            ref: importRef, type: 'file', accept: 'application/json,.json',
+            style: { display: 'none' },
+            onChange: (e) => {
+              const f = e.target.files && e.target.files[0];
+              if (f) importTodos(f);
+              e.target.value = '';
+            },
+          }),
           h('button', { className: 'todo-tool', title: '帮助', onClick: () => setHelpOpen((v) => !v) },
             h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' },
               h('circle', { cx: 12, cy: 12, r: 8.6 }),

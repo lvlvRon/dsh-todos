@@ -31,6 +31,9 @@
       mk({ title: '体检预约', dueDate: '2026-11-26', dueTime: '09:00', tag: 'health', important: true, urgent: false }),
       mk({ title: '研究一下 DSH 插件文档', tag: 'study', important: false, urgent: false }),
       mk({ title: '准备周会材料', dueDate: '2026-11-22', dueTime: '08:30', tag: 'work', important: true, urgent: true, done: true }),
+      mk({ title: '三天内的示例：给中介回电', dueDate: '2026-11-24', dueTime: '11:00', tag: 'life' }),
+      mk({ title: '七天内的示例：续签合同', dueDate: '2026-11-26', dueTime: '14:00', tag: 'work', important: true }),
+      mk({ title: '以后的示例：年度体检', dueDate: '2026-12-18', dueTime: '09:30', tag: 'health' }),
     ],
   };
 
