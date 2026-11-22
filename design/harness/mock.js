@@ -174,7 +174,8 @@
         + '> 明天 15:00 跟王工对接口，提前 15 分钟过一遍接口相关的东西。\n\n'
         + '---\n\n'
         + '要我把「准备接口材料」也加一条吗？';
-      const block = '<todo>' + JSON.stringify({ tasks, missing: ['去趟银行'] }) + '</todo>';
+      const block = '<todo>' + JSON.stringify({ tasks, missing: ['去趟银行'] }) + '</todo>'
+        + '<ask>' + JSON.stringify({ options: ['挪到周三', '今天打完', '先跳过'] }) + '</ask>';
       const enc = new TextEncoder();
       let phase = 0;
       let i = 0;
@@ -194,6 +195,7 @@
                 phase = 1;
                 i = 0;
                 c.enqueue(enc.encode('event: draft\ndata: ' + JSON.stringify({ tasks, missing: ['去趟银行'] }) + '\n\n'));
+                c.enqueue(enc.encode('event: ask\ndata: ' + JSON.stringify({ options: ['挪到周三', '今天打完', '先跳过'] }) + '\n\n'));
               }
             } else if (i < prose.length) {
               c.enqueue(enc.encode('event: delta\ndata: ' + JSON.stringify({ text: prose.slice(i, i + 8) }) + '\n\n'));

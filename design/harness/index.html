@@ -78,6 +78,14 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('choose') >= 0) {
+    var tries3 = 0;
+    var iv3 = setInterval(function () {
+      var b3 = document.querySelector('.todo-ask-btn');
+      if (b3) { clearInterval(iv3); b3.click(); }
+      else if (++tries3 > 90) clearInterval(iv3);
+    }, 50);
+  }
   if (location.hash.indexOf('dbl') >= 0) {
     var row0 = document.querySelector('.todo-row');
     if (row0) row0.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));

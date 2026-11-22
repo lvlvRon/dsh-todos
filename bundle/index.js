@@ -541,8 +541,9 @@ export async function apply(ctx) {
           }
         }
 
-        const { prose, tasks } = splitTasks(acc);
+        const { prose, tasks, ask } = splitTasks(acc);
         if (tasks) sse.event('draft', tasks);
+        if (ask) sse.event('ask', ask);
 
         const messages = [
           ...(conv.messages || []),

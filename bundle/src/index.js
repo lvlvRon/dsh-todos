@@ -380,13 +380,14 @@ window.__ModuleLoader__.load({
     function cleanText(text) {
       return String(text || '')
         .replace(/<todo>[\s\S]*?<\/todo>/g, '')
-        .replace(/<\/?todo>/g, '')
+        .replace(/<ask>[\s\S]*?<\/ask>/g, '')
+        .replace(/<\/?(?:todo|ask)>/g, '')
         .replace(/^\s*<\s*(?!todo>)/, '')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
     }
 
-    function renderMessage(m, key, onCreate, onPreview) {
+    function renderMessage(m, key, onCreate, onPreview, onChoose) {
       if (m.role === 'user') {
         const hasImgs = Boolean(m.images && m.images.length);
         /* 只有图时不要再显示「（截图）」占位文字 */
@@ -412,6 +413,16 @@ window.__ModuleLoader__.load({
           shown ? h(Markdown, { text: shown }) : null,
           m.drafts && m.drafts.length
             ? h(DraftCard, { tasks: m.drafts, ready: Boolean(m.ready), onCreate })
+            : null,
+          m.ask && m.ask.length
+            ? h('div', { className: 'todo-ask' },
+                ...m.ask.map((opt, k) => h('button', {
+                  key: k,
+                  className: 'todo-ask-btn',
+                  'data-on': m.chosen === opt ? '1' : '0',
+                  disabled: Boolean(m.chosen),
+                  onClick: () => onChoose && onChoose(m.id, opt),
+                }, opt)))
             : null,
           m.error ? h('div', { className: 'todo-msg-err' }, m.error) : null));
     }
@@ -520,7 +531,7 @@ window.__ModuleLoader__.load({
       messages, busy, draft, onDraft, onSend, models, modelName, chipLabel, effortName,
       menuOpen, onToggleMenu, onPick,
       attachments, onPasteImages, onRemoveAttachment, onCreateDrafts, ctxInfo, onPreview,
-      efforts, onPickEffort, onClear,
+      efforts, onPickEffort, onClear, onChoose,
     }) {
       const threadRef = React.useRef(null);
       const wrapRef = React.useRef(null);
@@ -566,7 +577,7 @@ window.__ModuleLoader__.load({
                 h('br'),
                 '我会把它拆成待办')
             : null,
-          ...messages.map((m, i) => renderMessage(m, i, onCreateDrafts, onPreview)),
+          ...messages.map((m, i) => renderMessage(m, i, onCreateDrafts, onPreview, onChoose)),
           busy ? h('div', { className: 'todo-typing' }, h('i'), h('i'), h('i')) : null,
         ),
         h('div', { className: 'todo-composer' },
@@ -1001,13 +1012,9 @@ window.__ModuleLoader__.load({
         shiftMonth(e.deltaY > 0 ? 1 : -1);
       };
 
-      const sendChat = React.useCallback(async () => {
-        const text = chatDraft.trim();
-        const imgs = attachments;
-        if ((!text && imgs.length === 0) || chatBusy) return;
+      const runSend = React.useCallback(async (text, imgs) => {
+        if (chatBusy) return;
 
-        setChatDraft('');
-        setAttachments([]);
         setMessages((m) => [...m, { role: 'user', text: text || '（截图）', images: imgs.map((x) => x.preview) }]);
         setChatBusy(true);
 
@@ -1036,18 +1043,37 @@ window.__ModuleLoader__.load({
               setMessages((m) => m.map((x) => (x.id === aid
                 ? { ...x, drafts: payload.tasks || [], ready: true }
                 : x)));
+            } else if (ev === 'ask' && payload) {
+              setMessages((m) => m.map((x) => (x.id === aid
+                ? { ...x, ask: payload.options || [] }
+                : x)));
             } else if (ev === 'error' && payload) {
               setMessages((m) => m.map((x) => (x.id === aid ? { ...x, error: payload.message || '对话失败' } : x)));
             }
           });
         } catch (e) {
           setMessages((m) => m.map((x) => (x.id === aid
-            ? { ...x, error: '抽取失败：' + ((e && e.message) || e) }
+            ? { ...x, error: '对话失败：' + ((e && e.message) || e) }
             : x)));
         } finally {
           setChatBusy(false);
         }
-      }, [chatDraft, attachments, chatBusy]);
+      }, [chatBusy]);
+
+      const sendChat = React.useCallback(() => {
+        const text = chatDraft.trim();
+        const imgs = attachments;
+        if ((!text && imgs.length === 0) || chatBusy) return;
+        setChatDraft('');
+        setAttachments([]);
+        runSend(text, imgs);
+      }, [chatDraft, attachments, chatBusy, runSend]);
+
+      /* 点选项 = 用户说了这句话 */
+      const chooseOption = React.useCallback((msgId, option) => {
+        setMessages((m) => m.map((x) => (x.id === msgId ? { ...x, chosen: option } : x)));
+        runSend(option, []);
+      }, [runSend]);
 
       const onPasteImages = React.useCallback(async (files) => {
         for (const file of files) {
@@ -1375,7 +1401,7 @@ window.__ModuleLoader__.load({
               h('div', { className: 'todo-help-row' }, '草案卡：缺日期的补完才能创建，创建过的会打 ✓'),
               h('div', { className: 'todo-help-row' }, '列表里勾选即完成，删除有 5 秒撤销'),
               h('div', { className: 'todo-help-row' }, '双击任意待办进入编辑；改动后需保存或取消才能退出'),
-              h('div', { className: 'todo-help-row' }, '输入框：Enter 发送 · Shift+Enter 换行 · Esc 关闭弹层'),
+              h('div', { className: 'todo-help-row' }, '助手提问时会给出选项按钮，点一下就等于回答'),
               h('div', { className: 'todo-help-row' }, '顶部两个图标切换列表 / 日历'))
           : null,
       );
@@ -1485,6 +1511,7 @@ window.__ModuleLoader__.load({
             ctxInfo,
             onPreview: setPreview,
             onClear: clearChat,
+            onChoose: chooseOption,
           }),
         ),
         toast ? h('div', { className: 'todo-toast' },

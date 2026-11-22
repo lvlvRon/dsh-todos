@@ -151,6 +151,13 @@ select.todo-field{max-width:62px}
 .todo-btn-primary{margin-left:auto;border:none;border-radius:7px;background:var(--td-accent);color:#fff;font-size:12px;padding:4px 12px;cursor:pointer;font-family:inherit}
 .todo-btn-primary:disabled{opacity:.4;cursor:not-allowed}
 .todo-msg-err{font-size:12px;color:var(--dsw-alias-state-error-primary);line-height:1.5}
+/* AI 选择题按钮 */
+.todo-ask{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.todo-ask-btn{font-family:inherit;font-size:12.5px;line-height:1.5;padding:6px 12px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);cursor:pointer;transition:background .13s,border-color .13s,color .13s}
+.todo-ask-btn:hover:not(:disabled){background:var(--td-accent-weak);border-color:var(--td-accent-ring);color:var(--td-accent)}
+.todo-ask-btn[data-on="1"]{background:var(--td-accent);border-color:var(--td-accent);color:#fff}
+.todo-ask-btn:disabled{opacity:.5;cursor:default}
+.todo-ask-btn[data-on="1"]:disabled{opacity:1}
 /* ---- 日历 ---- */
 .todo-cal{flex:1;min-width:0;display:flex;flex-direction:column;padding:16px 22px 24px;gap:8px;overflow:auto}
 .todo-cal-nav{display:flex;align-items:center;gap:8px;position:relative;padding-bottom:2px}

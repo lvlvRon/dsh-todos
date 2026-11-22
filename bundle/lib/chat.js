@@ -18,6 +18,12 @@ const PERSONA = `你是「小步」，用户待办与日程的管理助手。你
 3. 关注人的状态：用户明显疲惫或压力大时，可以给一句实在的话或建议休息；
    不灌鸡汤，不说教。
 
+【需要用户做决定时】
+不要只在正文里发问。在正文之后补一个选择块，让用户点按钮就能回答：
+<ask>{"options":["今天打完","挪到周三","先跳过"]}</ask>
+选项 2–4 个，每个都是用户会直接说出口的一句短话（点一下等于他说了这句）。
+正文里说明为什么这么问，选项本身不要重复问题。
+
 【安全边界（必须遵守）】
 - **你不能修改或删除已有待办**，只能提出新增草案。用户说「去掉 / 改掉 / 换成」某条时，
   不要声称已经做了 —— 直接说明需要他在列表里操作，或者把要处理的条目标题复述一遍让他确认。
@@ -67,55 +73,108 @@ export function buildSystemPrompt({ now, todos, summary, transcript, userProfile
 }
 
 /**
- * 从累积文本里剥离 <todo> 块。
+ * 从累积文本里剥离结构化块。
  * 流式阶段用于"只吐自然语言"；结束后用于取出结构化结果。
  */
-export function splitTasks(text) {
-  const raw = String(text || '');
-  const start = raw.indexOf('<todo>');
-  let prose = raw;
-  let block = null;
-  if (start >= 0) {
-    const end = raw.indexOf('</todo>', start);
-    prose = raw.slice(0, start) + (end >= 0 ? raw.slice(end + 7) : '');
-    if (end >= 0) block = raw.slice(start + 6, end);
-  }
-  const trimmed = tidy(prose).replace(/\n{3,}/g, '\n\n').trim();
-
-  let parsed = null;
-  if (block) {
-    try {
-      const data = JSON.parse(block);
-      parsed = {
-        tasks: Array.isArray(data.tasks) ? data.tasks : [],
-        missing: Array.isArray(data.missing) ? data.missing : [],
-      };
-    } catch (e) {
-      parsed = { tasks: [], missing: [], error: 'todo 块 JSON 解析失败' };
-    }
-  }
-  return { prose: trimmed, tasks: parsed };
-}
 
 /** 清掉模型偶发的前导 "<" 残渣 */
 function tidy(text) {
   return String(text || '').replace(/^\s*<\s*(?!todo>)/, '').replace(/^\s+/, '');
 }
 
-/** 流式可见文本：剔除 <todo> 块（含未闭合的情况），只保留给人看的部分 */
+const BLOCK_NAMES = ['todo', 'ask'];
+
+function markerAt(raw, i) {
+  for (const name of BLOCK_NAMES) {
+    const tag = '<' + name + '>';
+    if (raw.startsWith(tag, i)) return tag;
+  }
+  return null;
+}
+
+/** 流式可见文本：剔除结构化块（含未闭合的情况），只保留给人看的部分 */
 export function visibleText(text) {
   const raw = String(text || '');
-  const start = raw.indexOf('<todo>');
-  if (start >= 0) {
-    const end = raw.indexOf('</todo>', start);
-    return tidy(end < 0 ? raw.slice(0, start) : raw.slice(0, start) + raw.slice(end + 7));
+  let out = '';
+  let i = 0;
+  while (i < raw.length) {
+    const lt = raw.indexOf('<', i);
+    if (lt < 0) { out += raw.slice(i); break; }
+    const tag = markerAt(raw, lt);
+    if (!tag) {
+      const tail = raw.slice(lt);
+      /* 可能是半个标记（如 "<as"），先扣住不吐 */
+      if (BLOCK_NAMES.some((n) => ('<' + n + '>').startsWith(tail))) {
+        out += raw.slice(i, lt);
+        return tidy(out);
+      }
+      out += raw.slice(i, lt + 1);
+      i = lt + 1;
+      continue;
+    }
+    out += raw.slice(i, lt);
+    const close = '</' + tag.slice(1, -1) + '>';
+    const end = raw.indexOf(close, lt + tag.length);
+    if (end < 0) return tidy(out);      // 块未闭合，后面全部扣住
+    i = end + close.length;
   }
-  /* 还没出现完整标记：若结尾像半个标记就先扣住不吐 */
-  for (let k = 1; k <= 6 && k <= raw.length; k += 1) {
-    const tail = raw.slice(-k);
-    if (tail.startsWith('<') && '<todo>'.startsWith(tail)) return tidy(raw.slice(0, raw.length - k));
+  return tidy(out);
+}
+
+/** 从完整文本里取出结构化块与正文 */
+export function extractBlocks(text) {
+  const raw = String(text || '');
+  const found = {};
+  let prose = '';
+  let i = 0;
+  while (i < raw.length) {
+    const lt = raw.indexOf('<', i);
+    if (lt < 0) { prose += raw.slice(i); break; }
+    const tag = markerAt(raw, lt);
+    if (!tag) { prose += raw.slice(i, lt + 1); i = lt + 1; continue; }
+    prose += raw.slice(i, lt);
+    const name = tag.slice(1, -1);
+    const close = '</' + name + '>';
+    const end = raw.indexOf(close, lt + tag.length);
+    if (end < 0) { i = raw.length; break; }
+    found[name] = raw.slice(lt + tag.length, end);
+    i = end + close.length;
   }
-  return tidy(raw);
+  return { prose: tidy(prose).replace(/\n{3,}/g, '\n\n').trim(), found };
+}
+
+/** 取出待办草案与选择项 */
+export function splitTasks(text) {
+  const { prose, found } = extractBlocks(text);
+
+  let tasks = null;
+  if (found.todo) {
+    try {
+      const data = JSON.parse(found.todo);
+      tasks = {
+        tasks: Array.isArray(data.tasks) ? data.tasks : [],
+        missing: Array.isArray(data.missing) ? data.missing : [],
+      };
+    } catch (e) {
+      tasks = { tasks: [], missing: [], error: 'todo 块 JSON 解析失败' };
+    }
+  }
+
+  let ask = null;
+  if (found.ask) {
+    try {
+      const data = JSON.parse(found.ask);
+      const options = (Array.isArray(data.options) ? data.options : [])
+        .map((o) => String(o).trim())
+        .filter(Boolean)
+        .slice(0, 4);
+      if (options.length) ask = { options };
+    } catch (e) {
+      ask = null;
+    }
+  }
+
+  return { prose, tasks, ask };
 }
 
 /** 判断是否需要压缩历史（路由侧直接比长度，这里留给将来的细粒度策略） */
