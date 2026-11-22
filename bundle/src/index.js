@@ -796,7 +796,11 @@ window.__ModuleLoader__.load({
         return h(EditRow, { t, onSave, onCancel: onCancelEdit });
       }
 
-      return h('div', { className: 'todo-row', 'data-done': t.done ? '1' : '0' },
+      return h('div', {
+        className: 'todo-row',
+        'data-done': t.done ? '1' : '0',
+        'data-q': String(q),
+      },
         h('button', { className: 'todo-check', onClick: () => onToggle(t), 'aria-label': '完成' }),
         h('span', { className: 'todo-prio', 'data-q': String(q), title: importantLabel(q) },
           h('i'), h('i'), h('i'), h('i')),
