@@ -156,6 +156,18 @@ setTimeout(function () {
     barTrackBg: track ? track.backgroundColor : null,
     barTrackW: track ? track.width : null,
     rowCount: document.querySelectorAll('.todo-row').length,
+    /* 检查 ---dsw-alias-label-tertiary 是否真的存在 */
+    varTertiary: (function () {
+      var v = getComputedStyle(document.documentElement).getPropertyValue('--dsw-alias-label-tertiary');
+      return v ? v.trim() : '(undefined)';
+    })(),
+    varSecondary: (function () {
+      return getComputedStyle(document.documentElement).getPropertyValue('--dsw-alias-label-secondary').trim();
+    })(),
+    addColor: (cs('.todo-add') || {}).color || null,
+    emptyColor: (cs('.todo-empty') || {}).color || null,
+    doneRowColor: (cs('.todo-row[data-done="1"] .todo-t') || {}).color || null,
+    doneRowDeco: (cs('.todo-row[data-done="1"] .todo-t') || {}).textDecorationLine || null,
   };
   var pre = document.createElement('pre');
   pre.id = 'diag';
