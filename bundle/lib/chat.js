@@ -116,9 +116,4 @@ export function visibleText(text) {
   return tidy(raw);
 }
 
-/** 判断是否需要压缩历史 */
-export function needsSummary(messages, summary, limit = 24) {
-  if (messages.length <= limit) return false;
-  if (summary && summary.upto >= messages.length - limit) return false;
-  return true;
-}
+/** 判断是否需要压缩历史（路由侧直接比长度，这里留给将来的细粒度策略） */

@@ -90,6 +90,10 @@ window.__ModuleLoader__.load({
 .todo-draft-title{width:100%;border:none;background:none;font-family:inherit;font-size:13px;color:var(--dsw-alias-label-primary);outline:none;padding:0 0 6px}
 .todo-draft-fields{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
 .todo-field{border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:none;font-family:inherit;font-size:11.5px;color:var(--dsw-alias-label-secondary);padding:2px 5px;outline:none;max-width:120px}
+.todo-draft-flags{display:flex;gap:5px;width:100%;margin-top:3px}
+.todo-field[type="date"]{max-width:106px}
+.todo-field[type="time"]{max-width:68px}
+select.todo-field{max-width:62px}
 .todo-field:focus{border-color:var(--td-accent-ring)}
 .todo-field[data-miss="1"]{border-color:var(--dsw-alias-state-warn-primary);border-style:dashed;color:var(--dsw-alias-state-warn-primary)}
 .todo-toggle{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:2px 7px;cursor:pointer;background:none;font-family:inherit}
@@ -285,30 +289,8 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /** 从流式累积文本里捞出已完整的 task 对象，用于渐进渲染 */
-    function partialTasks(text) {
-      const out = [];
-      const anchor = text.indexOf('"tasks"');
-      if (anchor < 0) return out;
-      const start = text.indexOf('[', anchor);
-      if (start < 0) return out;
-      let depth = 0;
-      let objStart = -1;
-      for (let i = start + 1; i < text.length; i++) {
-        const c = text[i];
-        if (c === '{') { if (depth === 0) objStart = i; depth += 1; }
-        else if (c === '}') {
-          depth -= 1;
-          if (depth === 0 && objStart >= 0) {
-            try { out.push(JSON.parse(text.slice(objStart, i + 1))); } catch (e) { /* 未完成 */ }
-            objStart = -1;
-          }
-        }
-      }
-      return out;
-    }
-
-    const PERIODS = [      { id: 'today', label: '今天', kinds: ['overdue', 'today'] },
+    const PERIODS = [
+      { id: 'today', label: '今天', kinds: ['overdue', 'today'] },
       { id: 'week', label: '本周', kinds: ['overdue', 'today', 'week'] },
       { id: 'month', label: '本月', kinds: ['overdue', 'today', 'week', 'later'] },
       { id: 'all', label: '全部', kinds: null },
@@ -381,14 +363,15 @@ window.__ModuleLoader__.load({
               className: 'todo-field', value: it.tag, disabled: !ready,
               onChange: (e) => patch(i, 'tag', e.target.value),
             }, ...Object.entries(TAG_META).map(([k, v]) => h('option', { key: k, value: k }, v.name))),
-            h('button', {
-              className: 'todo-toggle', 'data-on': it.important ? '1' : '0',
-              disabled: !ready, onClick: () => patch(i, 'important', !it.important),
-            }, '重要'),
-            h('button', {
-              className: 'todo-toggle', 'data-on': it.urgent ? '1' : '0',
-              disabled: !ready, onClick: () => patch(i, 'urgent', !it.urgent),
-            }, '紧急'),
+            h('div', { className: 'todo-draft-flags' },
+              h('button', {
+                className: 'todo-toggle', 'data-on': it.important ? '1' : '0',
+                disabled: !ready, onClick: () => patch(i, 'important', !it.important),
+              }, '重要'),
+              h('button', {
+                className: 'todo-toggle', 'data-on': it.urgent ? '1' : '0',
+                disabled: !ready, onClick: () => patch(i, 'urgent', !it.urgent),
+              }, '紧急')),
           ),
         )),
         ready
