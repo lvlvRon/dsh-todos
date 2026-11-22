@@ -78,6 +78,41 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('img') >= 0) {
+    var cv = document.createElement('canvas');
+    cv.width = 240; cv.height = 160;
+    var gg = cv.getContext('2d');
+    gg.fillStyle = '#e8ecf8'; gg.fillRect(0, 0, 240, 160);
+    gg.fillStyle = '#4d6bfe'; gg.font = '16px sans-serif';
+    gg.fillText('会议通知截图', 62, 84);
+    cv.toBlob(function (blob) {
+      var file = new File([blob], 'shot.png', { type: 'image/png' });
+      var dt = new DataTransfer();
+      dt.items.add(file);
+      var ta = document.querySelector('.todo-textarea');
+      if (ta) {
+        ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      }
+      var tries = 0;
+      var iv = setInterval(function () {
+        var b = document.querySelector('.todo-send');
+        if (b && !b.disabled) {
+          clearInterval(iv);
+          b.click();
+          if (location.hash.indexOf('open') >= 0) {
+            var tries2 = 0;
+            var iv2 = setInterval(function () {
+              var im = document.querySelector('.todo-msg-imgs img');
+              if (im) { clearInterval(iv2); im.click(); }
+              else if (++tries2 > 60) clearInterval(iv2);
+            }, 50);
+          }
+        } else if (++tries > 60) {
+          clearInterval(iv);
+        }
+      }, 50);
+    }, 'image/png');
+  }
   if (location.hash.indexOf('collapse') >= 0) {
     var tools = document.querySelectorAll('.todo-tool');
     if (tools.length >= 4) tools[3].click();

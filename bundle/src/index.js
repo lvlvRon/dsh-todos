@@ -386,14 +386,24 @@ window.__ModuleLoader__.load({
         .trim();
     }
 
-    function renderMessage(m, key, onCreate) {
+    function renderMessage(m, key, onCreate, onPreview) {
       if (m.role === 'user') {
+        const hasImgs = Boolean(m.images && m.images.length);
+        /* 只有图时不要再显示「（截图）」占位文字 */
+        const bubbleText = hasImgs && m.text === '（截图）' ? '' : m.text;
         return h('div', { key, className: 'todo-msg' },
           h('div', { className: 'todo-bubble' },
-            m.images && m.images.length
-              ? h('div', { className: 'todo-msg-imgs' }, ...m.images.map((src, k) => h('img', { key: k, src })))
+            hasImgs
+              ? h('div', { className: 'todo-msg-imgs' },
+                  ...m.images.map((src, k) => h('img', {
+                    key: k,
+                    src,
+                    alt: '发送的截图',
+                    title: '查看原图',
+                    onClick: () => onPreview && onPreview(src),
+                  })))
               : null,
-            m.text));
+            bubbleText));
       }
       const shown = cleanText(m.text);
       return h('div', { key, className: 'todo-ai' },
@@ -556,7 +566,7 @@ window.__ModuleLoader__.load({
                 h('br'),
                 '我会把它拆成待办')
             : null,
-          ...messages.map((m, i) => renderMessage(m, i, onCreateDrafts)),
+          ...messages.map((m, i) => renderMessage(m, i, onCreateDrafts, onPreview)),
           busy ? h('div', { className: 'todo-typing' }, h('i'), h('i'), h('i')) : null,
         ),
         h('div', { className: 'todo-composer' },
