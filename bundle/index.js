@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Host 半：待办插件。
  *
  * P1：真实数据层 —— 存储域 + 增删改查路由。
@@ -11,7 +11,7 @@ import { appendFileSync } from 'node:fs';
 import { todoSpec, normalize, compare, now } from './lib/domain.js';
 import { send, fail, readJson, guard, openSse } from './lib/channel.js';
 import { buildMonth, TABLE_RANGE } from './lib/calendar.js';
-import { buildSystemPrompt, splitTasks, visibleText } from './lib/chat.js';
+import { buildSystemPrompt, splitTasks, visibleText, TODO_QUERY_TOOL, runTodoQuery } from './lib/chat.js';
 
 export const inject = ['webServer', 'storageDomain'];
 export const name = 'todo';
@@ -522,27 +522,69 @@ export async function apply(ctx) {
 
         let acc = '';
         let sent = 0;
-        for await (const chunk of llm.stream({
-          provider: selection.provider,
-          model: selection.model,
-          reasoningEffort: selection.reasoningEffort || undefined,
-          system,
-          messages: [{ role: 'user', content }],
-          signal: controller.signal,
-        })) {
-          if (chunk.type === 'text-delta') {
-            acc += chunk.text;
-            const visible = visibleText(acc);
-            if (visible.length > sent) {
-              sse.event('delta', { text: visible.slice(sent) });
-              sent = visible.length;
+        let rounds = 0;
+        const convo = [{ role: 'user', content }];
+        const pad2 = (n) => String(n).padStart(2, '0');
+        const todayStr = new Date().getFullYear() + '-' + pad2(new Date().getMonth() + 1) + '-' + pad2(new Date().getDate());
+
+        /* 工具循环：模型需要库里的明细时自己发起查询，最多 3 轮 */
+        while (rounds < 3) {
+          rounds += 1;
+          const calls = [];
+          for await (const chunk of llm.stream({
+            provider: selection.provider,
+            model: selection.model,
+            reasoningEffort: selection.reasoningEffort || undefined,
+            system,
+            messages: convo,
+            tools: [TODO_QUERY_TOOL],
+            signal: controller.signal,
+          })) {
+            if (chunk.type === 'text-delta') {
+              acc += chunk.text;
+              const visible = visibleText(acc);
+              if (visible.length > sent) {
+                sse.event('delta', { text: visible.slice(sent) });
+                sent = visible.length;
+              }
+            } else if (chunk.type === 'block-end' && chunk.block && chunk.block.type === 'tool-call') {
+              calls.push(chunk.block);
+            } else if (chunk.type === 'finish') {
+              const kind = chunk.reason && chunk.reason.kind ? chunk.reason.kind : 'stop';
+              if (kind === 'error' && chunk.reason.failure) {
+                sse.event('error', { message: chunk.reason.failure.message || 'model error' });
+              }
             }
-          } else if (chunk.type === 'finish') {
-            sse.event('finish', {
-              reason: chunk.reason && chunk.reason.kind ? chunk.reason.kind : 'stop',
+          }
+          if (!calls.length) break;
+
+          convo.push({
+            id: 'a_' + Date.now() + '_' + rounds,
+            createdAt: Date.now(),
+            role: 'assistant',
+            source: { kind: 'model', provider: selection.provider, model: selection.model },
+            content: calls.map((c) => ({
+              type: 'tool-call', id: c.id, name: c.name, arguments: c.arguments,
+            })),
+          });
+
+          for (const call of calls) {
+            let result = { text: '未知工具：' + call.name, count: 0 };
+            if (call.name === 'query_todos') {
+              result = runTodoQuery([...table.entries()], call.arguments, todayStr);
+            }
+            sse.event('tool', { name: call.name, count: result.count });
+            convo.push({
+              id: 't_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+              createdAt: Date.now(),
+              role: 'tool',
+              source: { kind: 'tool', callId: call.id },
+              toolCallId: call.id,
+              content: [{ type: 'text', text: result.text }],
             });
           }
         }
+        sse.event('finish', { reason: 'stop' });
 
         const { prose, tasks, ask } = splitTasks(acc);
         if (tasks) sse.event('draft', tasks);

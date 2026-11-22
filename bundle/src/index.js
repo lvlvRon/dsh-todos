@@ -434,6 +434,10 @@ window.__ModuleLoader__.load({
           m.drafts && m.drafts.length
             ? h(DraftCard, { tasks: m.drafts, ready: Boolean(m.ready), onCreate, knownTitles })
             : null,
+          m.tools && m.tools.length
+            ? h('div', { className: 'todo-tool-note' },
+                '已查询待办库 · ' + m.tools.map((t) => t.count + ' 条').join(' / '))
+            : null,
           m.ask && m.ask.length
             ? h('div', { className: 'todo-ask' },
                 ...m.ask.map((opt, k) => h('button', {
@@ -1089,6 +1093,10 @@ window.__ModuleLoader__.load({
             } else if (ev === 'ask' && payload) {
               setMessages((m) => m.map((x) => (x.id === aid
                 ? { ...x, ask: payload.options || [] }
+                : x)));
+            } else if (ev === 'tool' && payload) {
+              setMessages((m) => m.map((x) => (x.id === aid
+                ? { ...x, tools: [...(x.tools || []), payload] }
                 : x)));
             } else if (ev === 'error' && payload) {
               setMessages((m) => m.map((x) => (x.id === aid ? { ...x, error: payload.message || '对话失败' } : x)));

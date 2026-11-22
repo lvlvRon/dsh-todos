@@ -49,41 +49,72 @@ const PERSONA = `你是「小步」，用户待办与日程的管理助手。你
 
 const TAG_LABEL = { work: '工作', life: '生活', study: '学习', health: '健康', money: '财务' };
 
-/**
- * 全量待办摘要：按到期时间排序，每条一行，压缩到可直接进 prompt 的密度。
- * 这是模型判断「要不要新建」的唯一事实来源，所以必须覆盖全部未完成项，
- * 同时用条数上限防止注意力被稀释。
- */
-function digest(today, todos) {
-  const open = todos.filter((t) => !t.done);
-  const done = todos.filter((t) => t.done);
-  const sorted = [...open].sort((a, b) => {
+export const TODO_QUERY_TOOL = {
+  name: 'query_todos',
+  description: '查询待办库并返回匹配条目。判断是否重复、查看某天安排、统计进度、确认某条是否存在时必须先调用它，不要凭上下文猜。',
+  parameters: {
+    type: 'object',
+    properties: {
+      keyword: { type: 'string', description: '标题或备注关键词，例如「体检」' },
+      from: { type: 'string', description: '起始日期 YYYY-MM-DD（含），可省略' },
+      to: { type: 'string', description: '结束日期 YYYY-MM-DD（含），可省略' },
+      status: { type: 'string', enum: ['open', 'done', 'all'], description: '默认只查未完成' },
+    },
+  },
+};
+
+/** 执行一次待办查询，返回给模型看的紧凑文本 */
+export function runTodoQuery(entries, args, today) {
+  let q = {};
+  try {
+    q = JSON.parse(String(args || '{}'));
+  } catch (e) {
+    q = {};
+  }
+  const all = entries.map(([, v]) => v);
+  const status = q.status === 'done' || q.status === 'all' ? q.status : 'open';
+
+  let rows = all;
+  if (status === 'open') rows = rows.filter((t) => !t.done);
+  else if (status === 'done') rows = rows.filter((t) => t.done);
+
+  if (q.keyword) {
+    const k = String(q.keyword).toLowerCase();
+    rows = rows.filter((t) => (t.title || '').toLowerCase().includes(k)
+      || (t.notes || '').toLowerCase().includes(k));
+  }
+  if (q.from) rows = rows.filter((t) => !t.dueDate || t.dueDate >= q.from);
+  if (q.to) rows = rows.filter((t) => Boolean(t.dueDate) && t.dueDate <= q.to);
+
+  rows = [...rows].sort((a, b) => {
     const ad = a.dueDate || '9999-12-31';
     const bd = b.dueDate || '9999-12-31';
     if (ad !== bd) return ad < bd ? -1 : 1;
     return String(a.dueTime || '99:99').localeCompare(String(b.dueTime || '99:99'));
   });
 
-  const lines = [];
-  lines.push(`共 ${todos.length} 条：未完成 ${open.length}，已完成 ${done.length}。`);
-
-  const LIMIT = 40;
-  for (const t of sorted.slice(0, LIMIT)) {
-    const when = !t.dueDate
-      ? '未排期'
-      : (t.dueDate < today
-        ? t.dueDate.slice(5).replace('-', '/') + ' 已逾期'
-        : (t.dueDate === today ? '今天' : t.dueDate.slice(5).replace('-', '/')));
-    const time = t.dueTime ? ' ' + t.dueTime : '';
+  const capped = rows.slice(0, 30);
+  const lines = capped.map((t) => {
+    const when = t.dueDate
+      ? (t.dueDate === today ? '今天' : t.dueDate.slice(5).replace('-', '/'))
+      : '未排期';
     const flag = (t.important ? '重要' : '') + (t.important && t.urgent ? '+' : '') + (t.urgent ? '紧急' : '');
-    lines.push(`- ${when}${time} ${t.title}${t.tag ? ' ·' + (TAG_LABEL[t.tag] || t.tag) : ''}${flag ? ' [' + flag + ']' : ''}`);
-  }
-  if (sorted.length > LIMIT) lines.push(`- （另有 ${sorted.length - LIMIT} 条未列出，按日期排在其后）`);
+    return `- ${when}${t.dueTime ? ' ' + t.dueTime : ''} ${t.title}`
+      + `${t.tag ? ' ·' + (TAG_LABEL[t.tag] || t.tag) : ''}`
+      + `${flag ? ' [' + flag + ']' : ''}${t.done ? ' [已完成]' : ''}`;
+  });
 
-  if (done.length) {
-    lines.push('已完成（不要重复创建）：' + done.slice(-15).map((t) => t.title).join('、'));
-  }
-  return lines.join('\n');
+  if (!rows.length) return { text: '没有匹配的条目。', count: 0 };
+  const head = `共 ${rows.length} 条匹配${rows.length > capped.length ? '（只列前 30 条）' : ''}：`;
+  return { text: head + '\n' + lines.join('\n'), count: rows.length };
+}
+
+/** 极简概览：只告诉模型库里有多少，明细让它自己去查 */
+function brief(today, todos) {
+  const open = todos.filter((t) => !t.done);
+  const overdue = open.filter((t) => t.dueDate && t.dueDate < today);
+  const todayCount = open.filter((t) => t.dueDate === today);
+  return `共 ${todos.length} 条：未完成 ${open.length}（其中逾期 ${overdue.length}、今天到期 ${todayCount.length}），已完成 ${todos.length - open.length}。`;
 }
 
 export function buildSystemPrompt({ now, todos, summary, transcript, userProfile }) {
@@ -92,7 +123,7 @@ export function buildSystemPrompt({ now, todos, summary, transcript, userProfile
   const parts = [
     PERSONA,
     `【时间】今天是 ${today} ${WEEK_CN[now.getDay()]}（Asia/Shanghai）。所有相对日期都按这一天换算。`,
-    `【当前待办】这是唯一事实来源，判断"有没有重复"必须看它：\n${digest(today, todos)}`,
+    `【待办库】${brief(today, todos)}\n具体条目不要凭上下文猜 —— 需要时调用 query_todos 查。`,
   ];
   if (summary) parts.push(`【你记得的事】\n${summary}`);
   if (transcript && transcript.length) {

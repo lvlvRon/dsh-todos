@@ -151,6 +151,8 @@ select.todo-field{max-width:62px}
 .todo-btn-primary{margin-left:auto;border:none;border-radius:7px;background:var(--td-accent);color:#fff;font-size:12px;padding:4px 12px;cursor:pointer;font-family:inherit}
 .todo-btn-primary:disabled{opacity:.4;cursor:not-allowed}
 .todo-msg-err{font-size:12px;color:var(--dsw-alias-state-error-primary);line-height:1.5}
+.todo-tool-note{font-size:11px;color:var(--dsw-alias-label-secondary);display:inline-flex;align-items:center;gap:5px;margin-top:2px}
+.todo-tool-note::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--dsw-alias-state-success-primary);display:block}
 /* AI 选择题按钮 */
 .todo-ask{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .todo-ask-btn{font-family:inherit;font-size:12.5px;line-height:1.5;padding:6px 12px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);cursor:pointer;transition:background .13s,border-color .13s,color .13s}
