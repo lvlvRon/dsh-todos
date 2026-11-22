@@ -34,9 +34,12 @@ dsh plugin install ./bundle
 ```
 bundle/
 ├─ index.js          Host 半：存储域 + HTTP 路由（Node 原生 handler）+ SSE
-├─ client.js         Client 半：单文件 React 组件，注册进 main 与侧栏图标
+├─ client.js         Client 半：**构建产物**（单文件，esbuild 打包压缩）
+├─ src/
+│  ├─ index.js       Client 源码：组件、状态、交互
+│  └─ styles.css     Client 样式（独立文件，构建时内联成字符串）
 ├─ lib/
-│  ├─ domain.js      todo / settings / conversation 三张表
+│  ├─ domain.js      todo / settings / conversation / events 四张表
 │  ├─ channel.js     路由封装：JSON、SSE、同源校验
 │  ├─ calendar.js    农历查表 + 节气天文算法 + 节日映射
 │  └─ chat.js        助手人格、上下文拼装、结构化块解析
@@ -44,13 +47,14 @@ bundle/
 └─ docs/DETAIL.md    插件详情页
 ```
 
-`design/` 是设计原型与本地预览；`tools/lunar-gen/` 是农历表生成与自校验脚本。
+**为什么 client 要构建**：DSH 的 client 半只有一个产物文件（`__ModuleLoader__.load({factory})`，
+工厂里的 `require` 只解析浏览器模块表，加载不到同目录其它文件）。所以源码拆开写，构建成单文件。
 
 ## 开发
 
 ```sh
-# 重新生成农历表并自校验（需要先 pnpm i）
-cd tools/lunar-gen && node gen.mjs
+cd bundle && pnpm i && pnpm build     # 源码 → client.js
+cd tools/lunar-gen && node gen.mjs    # 重新生成并自校验农历表
 
 # 本地预览面板（假数据，渲染同一份 bundle/client.js）
 # 直接双击 design/harness/index.html
