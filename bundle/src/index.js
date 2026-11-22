@@ -345,7 +345,8 @@ window.__ModuleLoader__.load({
        ============================================================ */
     function ChatPane({
       messages, busy, draft, onDraft, onSend, models, modelName, menuOpen, onToggleMenu, onPick,
-      attachments, onPasteImages, onRemoveAttachment, onCreateDrafts, ctxInfo,
+      attachments, onPasteImages, onRemoveAttachment, onCreateDrafts, ctxInfo, onPreview,
+      efforts, onPickEffort,
     }) {
       const threadRef = React.useRef(null);
       const wrapRef = React.useRef(null);
@@ -389,8 +390,17 @@ window.__ModuleLoader__.load({
             attachments && attachments.length
               ? h('div', { className: 'todo-attach-rail' },
                   ...attachments.map((a, i) => h('div', { key: i, className: 'todo-attach' },
-                    h('img', { src: a.preview }),
-                    h('button', { onClick: () => onRemoveAttachment(i), title: '移除' }, '×'),
+                    h('img', {
+                      src: a.preview,
+                      title: '查看原图',
+                      alt: '待识别截图',
+                      onClick: () => onPreview(a.preview),
+                    }),
+                    h('button', {
+                      className: 'todo-attach-x',
+                      onClick: (e) => { e.stopPropagation(); onRemoveAttachment(i); },
+                      title: '移除',
+                    }, '×'),
                   )))
               : null,
             h('textarea', {
@@ -436,6 +446,17 @@ window.__ModuleLoader__.load({
                       }, '跟随 DSH 默认',
                         h('span', { className: 'todo-model-badge' },
                           models.current && models.current.source === 'default' ? '当前' : '推荐')),
+                      ...(efforts && efforts.efforts && efforts.efforts.length
+                        ? [
+                            h('div', { key: 'g-eff', className: 'todo-model-group' }, '思考等级'),
+                            ...efforts.efforts.map((e) => h('button', {
+                              key: 'eff-' + e.id,
+                              className: 'todo-model-item',
+                              'data-on': models.current && models.current.reasoningEffort === e.id ? '1' : '0',
+                              onClick: () => onPickEffort(e.id),
+                            }, e.name)),
+                          ]
+                        : []),
                       ...models.providers.map((p) => [
                         h('div', { key: 'g-' + p.id, className: 'todo-model-group' }, p.name),
                         ...(p.models || []).map((m) => h('button', {
@@ -517,15 +538,21 @@ window.__ModuleLoader__.load({
       const [chatBusy, setChatBusy] = React.useState(false);
       const [ctxInfo, setCtxInfo] = React.useState(null);
       const [models, setModels] = React.useState(null);
+      const [efforts, setEfforts] = React.useState(null);
       const [modelMenu, setModelMenu] = React.useState(false);
 
-      React.useEffect(() => {
-        let alive = true;
-        api('GET', 'models')
-          .then((d) => { if (alive) setModels(d); })
-          .catch(() => { /* 模型清单拿不到就退回占位文案 */ });
-        return () => { alive = false; };
+      const refreshMeta = React.useCallback(async () => {
+        try {
+          const d = await api('GET', 'models');
+          setModels(d);
+        } catch (e) { /* 拿不到就退回占位文案 */ }
+        try {
+          const r = await api('GET', 'reasoning');
+          setEfforts(r);
+        } catch (e) { /* 没有思考等级就不显示这一档 */ }
       }, []);
+
+      React.useEffect(() => { refreshMeta(); }, []);
 
       const modelName = React.useMemo(() => {
         if (!models || !models.current) return '模型';
@@ -534,17 +561,50 @@ window.__ModuleLoader__.load({
         return (m && m.name) || models.current.model;
       }, [models]);
 
+      const effortName = React.useMemo(() => {
+        if (!models || !models.current) return '';
+        const id = models.current.reasoningEffort || (efforts && efforts.current) || '';
+        if (!id) return '';
+        const hit = ((efforts && efforts.efforts) || []).find((e) => e.id === id);
+        return hit ? hit.name : id;
+      }, [models, efforts]);
+
+      const chipLabel = effortName ? modelName + ' ' + effortName : modelName;
+
       const pickModel = React.useCallback(async (provider, model) => {
         setModelMenu(false);
         try {
-          const d = await api('POST', 'model', provider ? { provider, model } : {});
-          setModels((prev) => (prev ? { ...prev, current: d.current } : prev));
+          await api('POST', 'model', provider ? { provider, model } : {});
+          await refreshMeta();
         } catch (e) {
           setToast({ text: '切换模型失败：' + e.message });
         }
-      }, []);
+      }, [refreshMeta]);
+
+      const pickEffort = React.useCallback(async (id) => {
+        if (!models || !models.current) return;
+        try {
+          await api('POST', 'model', {
+            provider: models.current.provider,
+            model: models.current.model,
+            reasoningEffort: id,
+          });
+          await refreshMeta();
+        } catch (e) {
+          setToast({ text: '切换思考等级失败：' + e.message });
+        }
+      }, [models, refreshMeta]);
 
       const [attachments, setAttachments] = React.useState([]);
+      const [preview, setPreview] = React.useState(null);
+
+      /* 大图预览：Esc 关闭 */
+      React.useEffect(() => {
+        if (!preview) return undefined;
+        const onKey = (e) => { if (e.key === 'Escape') setPreview(null); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+      }, [preview]);
 
       /* —— 日历视图 —— */
       const [view, setView] = React.useState('list');
@@ -944,19 +1004,25 @@ window.__ModuleLoader__.load({
           h(ChatPane, {
             messages, busy: chatBusy, draft: chatDraft,
             onDraft: setChatDraft, onSend: sendChat,
-            models, modelName, menuOpen: modelMenu,
+            models, modelName: chipLabel, menuOpen: modelMenu,
             onToggleMenu: setModelMenu, onPick: pickModel,
+            efforts, onPickEffort: pickEffort,
             attachments,
             onPasteImages,
             onRemoveAttachment: (i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i)),
             onCreateDrafts: createDrafts,
             ctxInfo,
+            onPreview: setPreview,
           }),
         ),
         toast ? h('div', { className: 'todo-toast' },
           h('span', null, toast.text),
           toast.undo ? h('button', { onClick: undo }, '撤销') : null,
         ) : null,
+        preview
+          ? h('div', { className: 'todo-lightbox', onClick: () => setPreview(null) },
+              h('img', { src: preview, alt: '预览' }))
+          : null,
       );
     }
 

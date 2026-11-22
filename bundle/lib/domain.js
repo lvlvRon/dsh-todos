@@ -31,6 +31,7 @@ export const todoSchema = z.object({
 export const settingsSchema = z.object({
   provider: z.string(),
   model: z.string(),
+  reasoningEffort: z.string().nullish(),
 });
 
 /** 单会话的对话记录 + 滚动摘要 */

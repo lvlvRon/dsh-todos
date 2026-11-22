@@ -106,12 +106,22 @@ export async function apply(ctx) {
   function currentModel() {
     const saved = settings.get(MODEL_KEY);
     if (saved && saved.provider && saved.model) {
-      return { provider: saved.provider, model: saved.model, source: 'saved' };
+      return {
+        provider: saved.provider,
+        model: saved.model,
+        reasoningEffort: saved.reasoningEffort || null,
+        source: 'saved',
+      };
     }
     const adm = ctx.get('agentDefaultModel');
     const sel = adm && typeof adm.currentSelection === 'function' ? adm.currentSelection() : null;
     if (sel && sel.provider && sel.model) {
-      return { provider: sel.provider, model: sel.model, source: 'default' };
+      return {
+        provider: sel.provider,
+        model: sel.model,
+        reasoningEffort: sel.reasoningEffort || null,
+        source: 'default',
+      };
     }
     return null;
   }
@@ -190,7 +200,8 @@ export async function apply(ctx) {
               name: info.name,
               inputModalities: info.inputModalities || null,
               contextWindow: info.context ? info.context.contextWindow : null,
-              hasReasoning: Boolean(info.reasoning),
+              reasoning: info.reasoning || null,
+              selectionReasoning: sel.reasoningEffort || null,
             };
           } catch (e) {
             out.resolveError = String((e && e.message) || e);
@@ -324,6 +335,28 @@ export async function apply(ctx) {
     },
   });
 
+  /* 当前模型的思考等级选项 */
+  route({
+    kind: 'exact',
+    path: '/api/todo/reasoning',
+    handler: async (req, res) => {
+      if (!guard(req, res)) return;
+      const llm = ctx.get('llm');
+      const cur = currentModel();
+      if (!llm || !cur) return send(res, 200, { ok: true, efforts: [] });
+      try {
+        const info = await llm.resolveModelInfo(cur.provider, cur.model);
+        send(res, 200, {
+          ok: true,
+          efforts: (info.reasoning && info.reasoning.efforts) || [],
+          current: cur.reasoningEffort || null,
+        });
+      } catch (e) {
+        send(res, 200, { ok: true, efforts: [], error: String(e && e.message) });
+      }
+    },
+  });
+
   /* 选择模型；传空对象表示恢复跟随 DSH 默认 */
   route({
     kind: 'exact',
@@ -333,7 +366,16 @@ export async function apply(ctx) {
       try {
         const body = await readJson(req);
         if (body && body.provider && body.model) {
-          await settings.put(MODEL_KEY, { provider: String(body.provider), model: String(body.model) });
+          const prev = settings.get(MODEL_KEY);
+          const sameModel = prev && prev.provider === body.provider && prev.model === body.model;
+          const effort = body.reasoningEffort !== undefined
+            ? (body.reasoningEffort || null)
+            : (sameModel ? prev.reasoningEffort : null);
+          await settings.put(MODEL_KEY, {
+            provider: String(body.provider),
+            model: String(body.model),
+            reasoningEffort: effort || null,
+          });
         } else {
           await settings.delete(MODEL_KEY);
         }
@@ -389,6 +431,7 @@ export async function apply(ctx) {
     for await (const chunk of llm.stream({
       provider: selection.provider,
       model: selection.model,
+      reasoningEffort: selection.reasoningEffort || undefined,
       system: '把下面的对话压缩成不超过 120 字的中文摘要，保留用户的偏好、计划、情绪线索和未完成事项。只输出摘要正文。',
       messages: [{
         role: 'user',
@@ -477,6 +520,7 @@ export async function apply(ctx) {
         for await (const chunk of llm.stream({
           provider: selection.provider,
           model: selection.model,
+          reasoningEffort: selection.reasoningEffort || undefined,
           system,
           messages: [{ role: 'user', content }],
           signal: controller.signal,

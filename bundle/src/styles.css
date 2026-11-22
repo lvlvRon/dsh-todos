@@ -57,17 +57,20 @@
 .todo-model-btn{display:inline-flex;align-items:center;gap:4px;max-width:160px;font-size:11.5px;color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:2px 7px;background:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:inherit}
 .todo-model-btn:hover{background:var(--td-hover);color:var(--dsw-alias-label-primary)}
 .todo-model-btn::after{content:"▾";font-size:9px;opacity:.6}
-.todo-model-pop{position:absolute;bottom:calc(100% + 8px);left:0;width:296px;max-height:330px;overflow-y:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 12px 32px -16px rgba(0,0,0,.45);padding:6px;z-index:40}
+.todo-model-pop{position:absolute;bottom:calc(100% + 8px);right:0;left:auto;width:296px;max-height:330px;overflow-y:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 12px 32px -16px rgba(0,0,0,.45);padding:6px;z-index:40}
 .todo-model-group{font-size:10.5px;color:var(--dsw-alias-label-secondary);padding:7px 8px 3px;letter-spacing:.04em}
 .todo-model-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font-size:12.5px;padding:5px 8px;border-radius:6px;border:none;background:none;color:var(--dsw-alias-label-primary);cursor:pointer;font-family:inherit}
 .todo-model-item:hover{background:var(--td-hover)}
 .todo-model-item[data-on="1"]{color:var(--td-accent);font-weight:500}
 .todo-model-badge{font-size:9.5px;color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l1);border-radius:4px;padding:0 4px;margin-left:auto;flex:none}
 /* ---- 附件 ---- */
-.todo-attach-rail{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-.todo-attach{position:relative;width:54px;height:54px;border-radius:7px;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);background:var(--td-chip-bg)}
-.todo-attach img{width:100%;height:100%;object-fit:cover;display:block}
-.todo-attach button{position:absolute;top:0;right:0;width:15px;height:15px;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:10px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
+.todo-attach-rail{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:10px;padding-top:2px}
+.todo-attach{position:relative;width:56px;height:56px;border-radius:9px;border:1px solid var(--dsw-alias-border-l1);background:var(--td-chip-bg)}
+.todo-attach img{width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;cursor:zoom-in}
+.todo-attach-x{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:rgba(20,20,24,.72);color:#fff;font-size:11px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.todo-attach-x:hover{background:rgba(20,20,24,.92)}
+.todo-lightbox{position:fixed;inset:0;background:rgba(8,8,10,.72);display:grid;place-items:center;z-index:400;cursor:zoom-out;padding:32px}
+.todo-lightbox img{max-width:92vw;max-height:88vh;border-radius:8px;box-shadow:0 24px 60px -20px rgba(0,0,0,.6)}
 .todo-msg-imgs{display:flex;gap:6px;margin-bottom:6px}
 .todo-msg-imgs img{width:80px;height:80px;object-fit:cover;border-radius:7px;border:1px solid var(--dsw-alias-border-l1);display:block}
 /* ---- 草案卡 ---- */

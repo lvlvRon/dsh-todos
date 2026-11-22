@@ -74,6 +74,18 @@
       return reply({ ok: true, y, m, cells, range: { from: 1900, to: 2100 } });
     }
 
+    if (u.includes('/api/todo/reasoning')) {
+      return reply({
+        ok: true,
+        efforts: [
+          { id: 'low', name: 'Low' },
+          { id: 'high', name: 'High' },
+          { id: 'max', name: 'Max' },
+        ],
+        current: 'max',
+      });
+    }
+
     if (u.includes('/api/todo/models')) {
       return reply({
         ok: true,
@@ -98,7 +110,7 @@
             ],
           },
         ],
-        current: { provider: 'opencode-go-live', model: 'deepseek-v4.1-flash', source: 'default' },
+        current: { provider: 'opencode-go-live', model: 'deepseek-v4.1-flash', reasoningEffort: 'max', source: 'default' },
       });
     }
 
