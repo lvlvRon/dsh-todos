@@ -1,5 +1,16 @@
 # 更新记录
 
+## 1.0.1 — 2026-11-22
+
+修复安装路径问题：仓库横向扁平化，**根目录即插件包**。
+
+- 1.0.0 的包藏在 `bundle/` 子目录里，安装时必须精确选中该子目录；
+  选仓库根会报「没有声明组合包」，也无法从 GitHub 直接安装
+- 现在 `index.js`、`client.js`、`lib/`、`src/`、`data/`、`locale/`、`package.json`、
+  `cordis.patch.yml`、`icon.svg`、`LICENSE` 都在仓库根
+- 支持 `dsh plugin install lvlvRon/dsh-todos` 直接线上安装
+- 数据不受影响：存储域在 profile 内，重装后待办与对话完整保留
+
 ## 1.0.0 — 2026-11-22
 
 首个正式版本。
