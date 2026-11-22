@@ -24,6 +24,10 @@ const PERSONA = `你是「小步」，用户待办与日程的管理助手。你
 选项 2–4 个，每个都是用户会直接说出口的一句短话（点一下等于他说了这句）。
 正文里说明为什么这么问，选项本身不要重复问题。
 
+【判断依据】
+- 【当前待办】里的清单是唯一事实来源。用户提到的事如果清单里已经有了（哪怕措辞不同），
+  不要重复创建；先说明它已经存在、在哪个时间，再问要不要改。
+
 【安全边界（必须遵守）】
 - **你不能修改或删除已有待办**，只能提出新增草案。用户说「去掉 / 改掉 / 换成」某条时，
   不要声称已经做了 —— 直接说明需要他在列表里操作，或者把要处理的条目标题复述一遍让他确认。
@@ -43,20 +47,42 @@ const PERSONA = `你是「小步」，用户待办与日程的管理助手。你
 - **到期日近本身不算 urgent**。临近截止只是时间信息，不要因为快到期就标紧急，
   否则所有事情最终都会变成紧急，优先级就失去意义了。宁可留 false 让用户自己判断。`;
 
-/** 今天的待办快照，作为每轮上下文 */
-function snapshot(today, todos) {
-  const done = todos.filter((t) => t.done).length;
+const TAG_LABEL = { work: '工作', life: '生活', study: '学习', health: '健康', money: '财务' };
+
+/**
+ * 全量待办摘要：按到期时间排序，每条一行，压缩到可直接进 prompt 的密度。
+ * 这是模型判断「要不要新建」的唯一事实来源，所以必须覆盖全部未完成项，
+ * 同时用条数上限防止注意力被稀释。
+ */
+function digest(today, todos) {
   const open = todos.filter((t) => !t.done);
-  const overdue = open.filter((t) => t.dueDate && t.dueDate < today);
-  const dueToday = open.filter((t) => t.dueDate === today);
+  const done = todos.filter((t) => t.done);
+  const sorted = [...open].sort((a, b) => {
+    const ad = a.dueDate || '9999-12-31';
+    const bd = b.dueDate || '9999-12-31';
+    if (ad !== bd) return ad < bd ? -1 : 1;
+    return String(a.dueTime || '99:99').localeCompare(String(b.dueTime || '99:99'));
+  });
+
   const lines = [];
-  lines.push(`今天共 ${todos.length} 条，已完成 ${done} 条，未完成 ${open.length} 条。`);
-  if (overdue.length) lines.push('逾期：' + overdue.map((t) => t.title).join('、'));
-  if (dueToday.length) {
-    lines.push('今天：' + dueToday.map((t) => (t.dueTime ? t.dueTime + ' ' : '') + t.title).join('、'));
+  lines.push(`共 ${todos.length} 条：未完成 ${open.length}，已完成 ${done.length}。`);
+
+  const LIMIT = 40;
+  for (const t of sorted.slice(0, LIMIT)) {
+    const when = !t.dueDate
+      ? '未排期'
+      : (t.dueDate < today
+        ? t.dueDate.slice(5).replace('-', '/') + ' 已逾期'
+        : (t.dueDate === today ? '今天' : t.dueDate.slice(5).replace('-', '/')));
+    const time = t.dueTime ? ' ' + t.dueTime : '';
+    const flag = (t.important ? '重要' : '') + (t.important && t.urgent ? '+' : '') + (t.urgent ? '紧急' : '');
+    lines.push(`- ${when}${time} ${t.title}${t.tag ? ' ·' + (TAG_LABEL[t.tag] || t.tag) : ''}${flag ? ' [' + flag + ']' : ''}`);
   }
-  const undated = open.filter((t) => !t.dueDate);
-  if (undated.length) lines.push('未排期：' + undated.slice(0, 8).map((t) => t.title).join('、'));
+  if (sorted.length > LIMIT) lines.push(`- （另有 ${sorted.length - LIMIT} 条未列出，按日期排在其后）`);
+
+  if (done.length) {
+    lines.push('已完成（不要重复创建）：' + done.slice(-15).map((t) => t.title).join('、'));
+  }
   return lines.join('\n');
 }
 
@@ -65,8 +91,8 @@ export function buildSystemPrompt({ now, todos, summary, transcript, userProfile
   const today = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
   const parts = [
     PERSONA,
-    `【时间】今天是 ${today} ${WEEK_CN[now.getDay()]}（Asia/Shanghai）。`,
-    `【当前待办】\n${snapshot(today, todos)}`,
+    `【时间】今天是 ${today} ${WEEK_CN[now.getDay()]}（Asia/Shanghai）。所有相对日期都按这一天换算。`,
+    `【当前待办】这是唯一事实来源，判断"有没有重复"必须看它：\n${digest(today, todos)}`,
   ];
   if (summary) parts.push(`【你记得的事】\n${summary}`);
   if (transcript && transcript.length) {
