@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>待办面板 · 本地预览</title>
+<style>
+/* 取自 DSH 运行时的真实 token 值（由面板自检上报） */
+:root{
+  --dsw-alias-bg-base:#fff;
+  --dsw-alias-bg-layer-1:#fff;
+  --dsw-alias-bg-layer-2:#fff;
+  --dsw-alias-bg-overlay:#e9ecf2;
+  --dsw-alias-border-l1:#0000000a;
+  --dsw-alias-border-l2:#0000001a;
+  --dsw-alias-label-primary:#0f1115;
+  --dsw-alias-label-secondary:#61666b;
+  --dsw-alias-brand-primary:#0f1115;
+  --dsw-alias-state-success-primary:#22c55e;
+  --dsw-alias-state-error-primary:#ec1313;
+  --dsw-alias-state-warn-primary:#f59e0b;
+  --dsw-alias-state-idle-primary:#d4d4d4;
+  --dsw-specific-sidebar-fill:#f9fafb;
+}
+html,body{margin:0;height:100%;background:var(--dsw-alias-bg-base)}
+body{font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;font-size:14px;color:var(--dsw-alias-label-primary)}
+#root{height:100%}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  window.addEventListener('error', function (e) {
+    var el = document.createElement('pre');
+    el.id = 'err';
+    el.style.cssText = 'color:#c00;white-space:pre-wrap;padding:16px;font-size:12px';
+    el.textContent = 'ERROR: ' + (e.message || e) + '\n' + (e.filename || '') + ':' + (e.lineno || '');
+    document.body.appendChild(el);
+  });
+</script>
+
+<script src="./node_modules/react/umd/react.production.min.js"></script>
+<script src="./node_modules/react-dom/umd/react-dom.production.min.js"></script>
+<script src="./mock.js"></script>
+<script>
+/* 模拟 DSH 的 client 模块加载器，把 bundle/client.js 原样跑起来 */
+window.__ModuleLoader__ = {
+  load(def) {
+    const mod = def.factory((name) => (name === 'react' ? window.React : undefined));
+    const captured = {};
+    const ctx = {
+      effect(fn) { const d = fn(); return () => (typeof d === 'function' ? d() : undefined); },
+      slots: {
+        inject(key, cb) { cb(); return () => {}; },
+        register(reg, comp) { captured[reg.name] = comp; return () => {}; },
+      },
+    };
+    mod.apply(ctx);
+    const Panel = captured.main;
+    if (!Panel) { document.getElementById('root').textContent = 'panel 未注册'; return; }
+    ReactDOM.render(React.createElement(Panel), document.getElementById('root'));
+  },
+};
+</script>
+<script src="../../bundle/client.js"></script>
+
+<script>
+/* 渲染后把关键计算样式写进 DOM，供 --dump-dom 读取 */
+setTimeout(function () {
+  if (location.hash.indexOf('draft') >= 0) {
+    var ta = document.querySelector('.todo-textarea');
+    if (ta) {
+      var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(ta, '明天下午三点跟王工对接口，周五前发报价单，另外抽空去趟银行');
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      setTimeout(function () {
+        var b = document.querySelector('.todo-send');
+        if (b) b.click();
+      }, 120);
+    }
+  }
+  if (location.hash.indexOf('cal') >= 0) {
+    var segs = document.querySelectorAll('.todo-head .todo-seg');
+    var viewSeg = segs[segs.length - 1];
+    if (viewSeg) {
+      var calBtn = viewSeg.querySelectorAll('button')[1];
+      if (calBtn) calBtn.click();
+    }
+  }
+  if (location.hash.indexOf('menu') >= 0) {
+    var b = document.querySelector('.todo-model-btn');
+    if (b) b.click();
+  }
+  function cs(sel) {
+    var el = document.querySelector(sel);
+    return el ? getComputedStyle(el) : null;
+  }
+  var root = document.querySelector('.todo-root');
+  var bar = cs('.todo-bar i');
+  var track = cs('.todo-bar');
+  var report = {
+    rootTone: root ? root.getAttribute('data-tone') : null,
+    accent: root ? getComputedStyle(root).getPropertyValue('--td-accent').trim() : null,
+    chipBgVar: root ? getComputedStyle(root).getPropertyValue('--td-chip-bg').trim() : null,
+    barFillWidth: bar ? bar.width : null,
+    barFillBg: bar ? bar.backgroundColor : null,
+    barTrackBg: track ? track.backgroundColor : null,
+    barTrackW: track ? track.width : null,
+    rowCount: document.querySelectorAll('.todo-row').length,
+  };
+  var pre = document.createElement('pre');
+  pre.id = 'diag';
+  pre.style.display = 'none';
+  pre.textContent = JSON.stringify(report);
+  document.body.appendChild(pre);
+}, 800);
+</script>
+</body>
+</html>

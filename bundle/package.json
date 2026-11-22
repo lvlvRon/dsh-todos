@@ -1,0 +1,38 @@
+{
+  "name": "@local/dsh-plugin-todo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "待办与日程面板：农历/节气、AI 抽取、列表与日历双视图",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "dependencies": {
+    "zod": "^4.6.6"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "lib",
+    "data",
+    "locale",
+    "docs",
+    "icon.svg",
+    "LICENSE"
+  ]
+}
