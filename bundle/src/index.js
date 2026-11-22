@@ -1493,7 +1493,11 @@ window.__ModuleLoader__.load({
         ) : null,
         preview
           ? h('div', { className: 'todo-lightbox', onClick: () => setPreview(null) },
-              h('img', { src: preview, alt: '预览' }))
+              h('img', { src: preview, alt: '预览' }),
+              h('button', {
+                className: 'todo-lightbox-x', title: '关闭（Esc）',
+                onClick: (e) => { e.stopPropagation(); setPreview(null); },
+              }, '✕'))
           : null,
       );
     }

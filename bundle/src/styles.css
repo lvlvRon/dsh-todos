@@ -1,5 +1,5 @@
 
-.todo-root{height:100%;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);
+.todo-root{position:relative;height:100%;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);
 --td-accent:#4d6bfe;--td-accent-weak:rgba(77,107,254,.10);--td-accent-soft:rgba(77,107,254,.16);--td-accent-ring:rgba(77,107,254,.28);
 --td-chip-bg:rgba(15,17,21,.055);--td-hover:rgba(15,17,21,.035)}
 .todo-root[data-tone="dark"]{--td-accent:#8ba0ff;--td-accent-weak:rgba(139,160,255,.16);--td-accent-soft:rgba(139,160,255,.22);--td-accent-ring:rgba(139,160,255,.38);--td-chip-bg:rgba(255,255,255,.09);--td-hover:rgba(255,255,255,.05)}
@@ -118,8 +118,10 @@
 .todo-attach img{width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;cursor:zoom-in}
 .todo-attach-x{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:rgba(20,20,24,.72);color:#fff;font-size:11px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .todo-attach-x:hover{background:rgba(20,20,24,.92)}
-.todo-lightbox{position:fixed;inset:0;background:rgba(8,8,10,.72);display:grid;place-items:center;z-index:400;cursor:zoom-out;padding:32px}
-.todo-lightbox img{max-width:92vw;max-height:88vh;border-radius:8px;box-shadow:0 24px 60px -20px rgba(0,0,0,.6)}
+.todo-lightbox{position:absolute;inset:0;background:rgba(14,15,18,.82);display:grid;place-items:center;z-index:400;cursor:zoom-out;padding:26px;border-radius:0}
+.todo-lightbox img{min-width:72px;min-height:72px;max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 24px 60px -20px rgba(0,0,0,.55);background:#fff;object-fit:contain}
+.todo-lightbox-x{position:absolute;top:10px;right:12px;width:30px;height:30px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:15px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
+.todo-lightbox-x:hover{background:rgba(255,255,255,.3)}
 .todo-msg-imgs{display:flex;gap:6px;margin-bottom:6px}
 .todo-msg-imgs img{width:80px;height:80px;object-fit:cover;border-radius:7px;border:1px solid var(--dsw-alias-border-l1);display:block;cursor:zoom-in}
 /* ---- 草案卡 ---- */

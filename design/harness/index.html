@@ -124,7 +124,8 @@ setTimeout(function () {
           if (location.hash.indexOf('open') >= 0) {
             var tries2 = 0;
             var iv2 = setInterval(function () {
-              var im = document.querySelector('.todo-msg-imgs img');
+              var ims = document.querySelectorAll('.todo-msg-imgs img');
+              var im = ims.length ? ims[ims.length - 1] : null;
               if (im) { clearInterval(iv2); im.click(); }
               else if (++tries2 > 60) clearInterval(iv2);
             }, 50);
