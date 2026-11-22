@@ -147,13 +147,33 @@ window.__ModuleLoader__.load({
     }
 
     /** 草案卡：流式时只读预览，拿到完整结果后可编辑 */
-    function DraftCard({ tasks, ready, onCreate }) {
-      const [items, setItems] = React.useState(() => (tasks || []).map(normalizeDraft));
+    function DraftCard({ tasks, ready, onCreate, knownTitles }) {
+      const [items, setItems] = React.useState(() => {
+        const known = new Set(knownTitles || []);
+        return (tasks || []).map((t) => {
+          const it = normalizeDraft(t);
+          return { ...it, _created: known.has(it.title) };
+        });
+      });
       const [busy, setBusy] = React.useState(false);
 
       React.useEffect(() => {
         if (!ready) setItems((tasks || []).map(normalizeDraft));
       }, [tasks, ready]);
+
+      /* 库里已经有同标题的条目 → 视为已创建（刷新后不再重复提交） */
+      React.useEffect(() => {
+        if (!ready) return;
+        const known = new Set(knownTitles || []);
+        setItems((prev) => {
+          let changed = false;
+          const next = prev.map((it) => {
+            if (!it._created && known.has(it.title)) { changed = true; return { ...it, _created: true }; }
+            return it;
+          });
+          return changed ? next : prev;
+        });
+      }, [knownTitles, ready]);
 
       const createdCount = items.filter((it) => it._created).length;
       const missingCount = items.filter((it) => !it.dueDate).length;
@@ -387,7 +407,7 @@ window.__ModuleLoader__.load({
         .trim();
     }
 
-    function renderMessage(m, key, onCreate, onPreview, onChoose) {
+    function renderMessage(m, key, onCreate, onPreview, onChoose, knownTitles) {
       if (m.role === 'user') {
         const hasImgs = Boolean(m.images && m.images.length);
         /* 只有图时不要再显示「（截图）」占位文字 */
@@ -412,7 +432,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'todo-ai-body' },
           shown ? h(Markdown, { text: shown }) : null,
           m.drafts && m.drafts.length
-            ? h(DraftCard, { tasks: m.drafts, ready: Boolean(m.ready), onCreate })
+            ? h(DraftCard, { tasks: m.drafts, ready: Boolean(m.ready), onCreate, knownTitles })
             : null,
           m.ask && m.ask.length
             ? h('div', { className: 'todo-ask' },
@@ -531,7 +551,7 @@ window.__ModuleLoader__.load({
       messages, busy, draft, onDraft, onSend, models, modelName, chipLabel, effortName,
       menuOpen, onToggleMenu, onPick,
       attachments, onPasteImages, onRemoveAttachment, onCreateDrafts, ctxInfo, onPreview,
-      efforts, onPickEffort, onClear, onChoose,
+      efforts, onPickEffort, onClear, onChoose, knownTitles,
     }) {
       const threadRef = React.useRef(null);
       const wrapRef = React.useRef(null);
@@ -577,7 +597,7 @@ window.__ModuleLoader__.load({
                 h('br'),
                 '我会把它拆成待办')
             : null,
-          ...messages.map((m, i) => renderMessage(m, i, onCreateDrafts, onPreview, onChoose)),
+          ...messages.map((m, i) => renderMessage(m, i, onCreateDrafts, onPreview, onChoose, knownTitles)),
           busy ? h('div', { className: 'todo-typing' }, h('i'), h('i'), h('i')) : null,
         ),
         h('div', { className: 'todo-composer' },
@@ -897,13 +917,25 @@ window.__ModuleLoader__.load({
         api('GET', 'conversation')
           .then((d) => {
             if (!alive || !d || !Array.isArray(d.messages) || !d.messages.length) return;
-            setMessages(d.messages.map((m, i) => ({
-              id: 'h' + i,
-              role: m.role === 'user' ? 'user' : 'ai',
-              text: m.text,
-              images: (m.images || []).map((x) => x.url
-                || ('/api/todo/shot?ref=' + encodeURIComponent(x.id))),
-            })));
+            const list = d.messages.map((m, i) => {
+              const next = d.messages[i + 1];
+              /* 下一句用户消息就是某个选项 → 视为已作答 */
+              const chosen = (m.ask && next && next.role === 'user' && m.ask.indexOf(next.text) >= 0)
+                ? next.text
+                : null;
+              return {
+                id: 'h' + i,
+                role: m.role === 'user' ? 'user' : 'ai',
+                text: m.text,
+                images: (m.images || []).map((x) => x.url
+                  || ('/api/todo/shot?ref=' + encodeURIComponent(x.id))),
+                drafts: m.drafts && m.drafts.length ? m.drafts : null,
+                ready: true,
+                ask: m.ask && m.ask.length ? m.ask : null,
+                chosen,
+              };
+            });
+            setMessages(list);
           })
           .catch(() => { /* 读不到就保持空 */ });
         return () => { alive = false; };
@@ -1522,6 +1554,7 @@ window.__ModuleLoader__.load({
             onPreview: setPreview,
             onClear: clearChat,
             onChoose: chooseOption,
+            knownTitles: (todos || []).map((t) => t.title),
           }),
         ),
         toast ? h('div', { className: 'todo-toast' },

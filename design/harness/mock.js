@@ -86,7 +86,15 @@
             text: '（截图）',
             images: [{ url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAWklEQVR42u3PMQEAAAgDoC251a3gLwSgOXLVkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkqRPCx4AAW0WefkAAAAASUVORK5CYII=' }],
           },
-          { role: 'assistant', text: '好。报价单放到周五，今天先不碰它。这周你已经有 4 件事，注意别挤在一起。' },
+          {
+            role: 'assistant',
+            text: '好。报价单放到周五，今天先不碰它。这周你已经有 4 件事，注意别挤在一起。',
+            drafts: [
+              { title: '去牙科', dueDate: '2026-11-28', tag: 'health', important: true, urgent: false },
+              { title: '写完年报初稿', dueDate: null, tag: 'work', important: true, urgent: false },
+            ],
+            ask: ['这周内写完', '下周三之前', '就先挂着，不设日期'],
+          },
         ],
         total: 4,
       });

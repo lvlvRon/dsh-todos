@@ -555,7 +555,13 @@ export async function apply(ctx) {
             text: text || '（截图）',
             images: imageRefs.length ? imageRefs : null,
           },
-          { role: 'assistant', text: prose },
+          {
+            role: 'assistant',
+            text: prose,
+            drafts: tasks && tasks.tasks && tasks.tasks.length ? tasks.tasks : null,
+            missing: tasks && tasks.missing && tasks.missing.length ? tasks.missing : null,
+            ask: ask && ask.options && ask.options.length ? ask.options : null,
+          },
         ].slice(-200);
         await conversations.put(CONV_KEY, {
           messages,
@@ -644,6 +650,9 @@ export async function apply(ctx) {
             width: r.width,
             height: r.height,
           })),
+          drafts: m.drafts || null,
+          missing: m.missing || null,
+          ask: m.ask || null,
         })),
         total: (conv.messages || []).length,
         summary: conv.summary || null,

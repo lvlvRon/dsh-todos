@@ -45,12 +45,26 @@ export const imageRefSchema = z.object({
   originalDimensions: z.object({ width: z.number(), height: z.number() }).nullish(),
 });
 
+/** 助手产出的待办草案（对话里回显用） */
+export const draftTaskSchema = z.object({
+  title: z.string(),
+  dueDate: z.string().nullish(),
+  dueTime: z.string().nullish(),
+  tag: z.string().nullish(),
+  important: z.boolean().nullish(),
+  urgent: z.boolean().nullish(),
+  notes: z.string().nullish(),
+});
+
 /** 单会话的对话记录 + 滚动摘要 */
 export const conversationSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     text: z.string(),
     images: z.array(imageRefSchema).nullish(),
+    drafts: z.array(draftTaskSchema).nullish(),
+    missing: z.array(z.string()).nullish(),
+    ask: z.array(z.string()).nullish(),
   })),
   summary: z.string().nullish(),
   updatedAt: z.number(),
