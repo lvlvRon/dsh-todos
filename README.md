@@ -1,4 +1,4 @@
-# dsh-plugin-todo
+﻿# dsh-plugin-todo
 
 一个 DeepSeek Harness 的待办插件：侧栏多一格入口，点开是**待办清单 + 日历 + 常驻 AI 助手**。
 
@@ -8,11 +8,26 @@
 
 ## 安装
 
-在 DSH 里 **Plugins → Add plugin → 选择本地目录 `bundle/`**，或命令行：
+三种方式，任选其一：
+
+**从 GitHub 直接装**（推荐，不用 clone）
+
+```
+dsh plugin install lvlvRon/dsh-todos
+```
+
+或在 DSH 里 **Plugins → Add plugin**，粘贴 `https://github.com/lvlvRon/dsh-todos`。
+
+**从本地目录装**
 
 ```sh
-dsh plugin install ./bundle
+git clone https://github.com/lvlvRon/dsh-todos.git
+dsh plugin install ./dsh-todos
 ```
+
+或在 Plugins → Add plugin 里选择 **仓库根目录**（`dsh-todos/` 本身，不是子目录）。
+
+**装什么**：仓库根就是插件包（`package.json` 里声明了 `dsh.bundle`），`client.js` 是已构建的产物，clone 后**不需要构建就能用**。
 
 安装后侧栏出现「待办」图标（排在「任务」之后）。
 
@@ -48,10 +63,13 @@ dsh plugin install ./bundle
 
 ## 结构
 
+仓库根就是插件包：
+
 ```
-bundle/
 ├─ index.js          Host 半：存储域 + HTTP 路由 + SSE + 工具循环
 ├─ client.js         Client 半：构建产物（单文件，esbuild 打包压缩）
+├─ package.json      dsh.bundle.patch + dsh.client{platform:'web'}
+├─ cordis.patch.yml  插入到 profile 的 patch 行
 ├─ src/
 │  ├─ index.js       Client 源码：组件、状态、交互
 │  └─ styles.css     Client 样式（构建时内联成字符串）
@@ -61,7 +79,9 @@ bundle/
 │  ├─ calendar.js    农历查表 + 节气天文算法 + 节日映射
 │  └─ chat.js        人设、上下文拼装、工具定义、结构化块解析
 ├─ data/lunar-table.json   1900–2100 农历表
-└─ docs/DETAIL.md    插件详情页
+├─ docs/             插件详情页与设计文档
+├─ design/           UI 原型与本地预览（不参与安装）
+└─ tools/            农历表生成、asar 检索等开发脚本
 ```
 
 **为什么 client 要构建**：DSH 的 client 半只有一个产物文件（`__ModuleLoader__.load({factory})`，工厂里的 `require` 只解析浏览器模块表）。所以源码拆开写、构建成单文件。
@@ -69,10 +89,10 @@ bundle/
 ## 开发
 
 ```sh
-cd bundle && pnpm i && pnpm build     # 源码 → client.js
+pnpm i && pnpm build                  # 源码 → client.js
 cd tools/lunar-gen && node gen.mjs    # 重新生成并自校验农历表
 
-# 本地预览面板（假数据，渲染同一份 bundle/client.js）
+# 本地预览面板（假数据，渲染同一份 client.js）
 # 直接双击 design/harness/index.html
 ```
 
