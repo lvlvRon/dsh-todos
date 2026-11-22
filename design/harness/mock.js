@@ -74,6 +74,19 @@
       return reply({ ok: true, y, m, cells, range: { from: 1900, to: 2100 } });
     }
 
+    if (u.includes('/api/todo/conversation')) {
+      return reply({
+        ok: true,
+        messages: [
+          { role: 'user', text: '明天下午三点跟王工对接口' },
+          { role: 'assistant', text: '记下了：明天 15:00 跟王工对接口。需要我提前 20 分钟提醒吗？' },
+          { role: 'user', text: '好，另外周五前把报价单发出去' },
+          { role: 'assistant', text: '好。报价单放到周五，今天先不碰它。这周你已经有 4 件事，注意别挤在一起。' },
+        ],
+        total: 4,
+      });
+    }
+
     if (u.includes('/api/todo/reasoning')) {
       return reply({
         ok: true,

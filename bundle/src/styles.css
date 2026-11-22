@@ -27,6 +27,8 @@
 .todo-chat-id b{font-size:13px;font-weight:600}
 .todo-chat-status{font-size:11px;color:var(--dsw-alias-label-secondary);display:flex;align-items:center;gap:4px}
 .todo-chat-status i{width:5px;height:5px;border-radius:50%;background:var(--dsw-alias-state-success-primary);display:block}
+.todo-chat-clear{margin-left:auto;flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);border:none;background:none;cursor:pointer;padding:3px 7px;border-radius:6px;font-family:inherit}
+.todo-chat-clear:hover{background:var(--td-hover);color:var(--dsw-alias-label-primary)}
 .todo-thread{flex:1;min-height:0;overflow-y:auto;padding:18px 16px 8px;display:flex;flex-direction:column;gap:14px}
 .todo-msg{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
 .todo-bubble{max-width:88%;border-radius:12px 12px 4px 12px;padding:9px 12px;font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;background:var(--td-chip-bg)}

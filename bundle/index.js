@@ -617,6 +617,38 @@ export async function apply(ctx) {
     },
   });
 
+  /* 历史对话（面板重开时回填）*/
+  route({
+    kind: 'exact',
+    path: '/api/todo/conversation',
+    handler: (req, res) => {
+      if (!guard(req, res)) return;
+      const conv = conversations.get(CONV_KEY) || { messages: [], summary: null, updatedAt: null };
+      send(res, 200, {
+        ok: true,
+        messages: (conv.messages || []).slice(-60),
+        total: (conv.messages || []).length,
+        summary: conv.summary || null,
+        updatedAt: conv.updatedAt || null,
+      });
+    },
+  });
+
+  /* 清空对话（连同摘要一起清，模型也随之忘记）*/
+  route({
+    kind: 'exact',
+    path: '/api/todo/conversation-clear',
+    handler: async (req, res) => {
+      if (!guard(req, res, { mutating: true })) return;
+      try {
+        await conversations.delete(CONV_KEY);
+        send(res, 200, { ok: true });
+      } catch (e) {
+        fail(res, 500, 'clear failed: ' + (e && e.message));
+      }
+    },
+  });
+
   /* 列表 */
   route({
     kind: 'exact',

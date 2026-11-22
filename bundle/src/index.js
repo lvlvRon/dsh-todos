@@ -380,7 +380,7 @@ window.__ModuleLoader__.load({
       messages, busy, draft, onDraft, onSend, models, modelName, chipLabel, effortName,
       menuOpen, onToggleMenu, onPick,
       attachments, onPasteImages, onRemoveAttachment, onCreateDrafts, ctxInfo, onPreview,
-      efforts, onPickEffort,
+      efforts, onPickEffort, onClear,
     }) {
       const threadRef = React.useRef(null);
       const wrapRef = React.useRef(null);
@@ -412,6 +412,12 @@ window.__ModuleLoader__.load({
             h('b', null, '小步'),
             h('span', { className: 'todo-chat-status' }, h('i'), '待办助手 · 常驻对话'),
           ),
+          messages.length
+            ? h('button', {
+                className: 'todo-chat-clear', title: '清空对话（历史与摘要一起删除）',
+                onClick: onClear,
+              }, '清空')
+            : null,
         ),
         h('div', { className: 'todo-thread', ref: threadRef },
           messages.length === 0 && !busy
@@ -600,6 +606,22 @@ window.__ModuleLoader__.load({
 
       /* —— 对话（P2 外壳，尚未接模型）—— */
       const [messages, setMessages] = React.useState([]);
+
+      /* 面板重开时从宿主回填历史对话 */
+      React.useEffect(() => {
+        let alive = true;
+        api('GET', 'conversation')
+          .then((d) => {
+            if (!alive || !d || !Array.isArray(d.messages) || !d.messages.length) return;
+            setMessages(d.messages.map((m, i) => ({
+              id: 'h' + i,
+              role: m.role === 'user' ? 'user' : 'ai',
+              text: m.text,
+            })));
+          })
+          .catch(() => { /* 读不到就保持空 */ });
+        return () => { alive = false; };
+      }, []);
       const [chatDraft, setChatDraft] = React.useState('');
       const [chatBusy, setChatBusy] = React.useState(false);
       const [ctxInfo, setCtxInfo] = React.useState(null);
@@ -769,6 +791,16 @@ window.__ModuleLoader__.load({
           } catch (e) {
             setToast({ text: '图片处理失败：' + ((e && e.message) || e) });
           }
+        }
+      }, []);
+
+      const clearChat = React.useCallback(async () => {
+        try {
+          await api('POST', 'conversation-clear', {});
+          setMessages([]);
+          setCtxInfo(null);
+        } catch (e) {
+          setToast({ text: '清空失败：' + ((e && e.message) || e) });
         }
       }, []);
 
@@ -1102,6 +1134,7 @@ window.__ModuleLoader__.load({
             onCreateDrafts: createDrafts,
             ctxInfo,
             onPreview: setPreview,
+            onClear: clearChat,
           }),
         ),
         toast ? h('div', { className: 'todo-toast' },
