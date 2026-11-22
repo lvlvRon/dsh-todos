@@ -56,11 +56,19 @@ window.__ModuleLoader__.load({
     }
 
     /** 相对日期分组 */
-    function groupOf(t, todayStr, weekEnd) {
-      if (!t.dueDate) return 'undated';
-      if (t.dueDate < todayStr) return 'overdue';
-      if (t.dueDate === todayStr) return 'today';
-      if (t.dueDate <= weekEnd) return 'week';
+    /** 剩余天数：负数为逾期，null 为未排期 */
+    function daysLeftOf(t, todayStr) {
+      if (!t.dueDate) return null;
+      return Math.round((Date.parse(t.dueDate) - Date.parse(todayStr)) / 86400000);
+    }
+
+    /** 分节：逾期并入「今天」；未排期并入「以后」 */
+    function groupOf(t, todayStr) {
+      const dl = daysLeftOf(t, todayStr);
+      if (dl === null) return 'later';
+      if (dl <= 0) return 'today';
+      if (dl <= 3) return 'd3';
+      if (dl <= 7) return 'd7';
       return 'later';
     }
 
@@ -117,20 +125,19 @@ window.__ModuleLoader__.load({
     }
 
     const PERIODS = [
-      /* maxDays：截止日在「今天 + N 天」以内（含逾期）；minDays：更远或未排期 */
-      { id: 'today', label: '今天', maxDays: 0 },
-      { id: 'd3', label: '三天内', maxDays: 3 },
-      { id: 'd7', label: '7天内', maxDays: 7 },
-      { id: 'later', label: '以后', minDays: 8 },
+      { id: 'today', label: '今天' },
+      { id: 'week', label: '本周' },
+      { id: 'month', label: '本月' },
+      { id: 'all', label: '全部' },
       { id: 'done', label: '已完成', doneOnly: true },
     ];
 
+    /* 列表内的分节：按剩余天数把未完成项分到四段 */
     const GROUP_LABELS = [
-      { key: 'overdue', label: '逾期', alert: true },
       { key: 'today', label: '今天' },
-      { key: 'week', label: '本周' },
+      { key: 'd3', label: '三天内' },
+      { key: 'd7', label: '7天内' },
       { key: 'later', label: '以后' },
-      { key: 'undated', label: '未排期' },
     ];
 
     /** 草案项补齐默认值 */
@@ -903,7 +910,7 @@ window.__ModuleLoader__.load({
     function TodoPanel() {
       const [todos, setTodos] = React.useState(null);
       const [error, setError] = React.useState(null);
-      const [period, setPeriod] = React.useState('today');
+      const [period, setPeriod] = React.useState('all');
       const [tagFilter, setTagFilter] = React.useState('all');
       const [creating, setCreating] = React.useState(false);
       const importRef = React.useRef(null);
@@ -1283,25 +1290,27 @@ window.__ModuleLoader__.load({
       const weekEnd = weekEndOf(todayStr);
       const monthEnd = monthEndOf(todayStr);
 
-      const decorated = (todos || []).map((t) => ({ ...t, _kind: groupOf(t, todayStr, weekEnd) }));
+      const decorated = (todos || []).map((t) => ({ ...t, _kind: groupOf(t, todayStr) }));
 
       const periodDef = PERIODS.find((p) => p.id === period) || PERIODS[0];
-      const daysLeftOf = (t) => (t.dueDate
-        ? Math.round((Date.parse(t.dueDate) - Date.parse(todayStr)) / 86400000)
-        : null);
+      const daysToWeekEnd = Math.round((Date.parse(weekEnd) - Date.parse(todayStr)) / 86400000);
+      const monthKey = todayStr.slice(0, 7);
 
       let visible;
       if (periodDef.doneOnly) {
         visible = decorated.filter((t) => t.done);
       } else {
         visible = decorated.filter((t) => !t.done);
-        if (periodDef.maxDays !== undefined) {
+        if (periodDef.id === 'today') {
+          visible = visible.filter((t) => { const dl = daysLeftOf(t, todayStr); return dl !== null && dl <= 0; });
+        } else if (periodDef.id === 'week') {
+          visible = visible.filter((t) => { const dl = daysLeftOf(t, todayStr); return dl !== null && dl <= daysToWeekEnd; });
+        } else if (periodDef.id === 'month') {
           visible = visible.filter((t) => {
-            if (!t.dueDate) return false;              // 未排期不进范围内视图
-            return daysLeftOf(t) <= periodDef.maxDays;  // 逾期为负数，自然包含在内
+            const dl = daysLeftOf(t, todayStr);
+            if (dl === null) return false;
+            return dl <= 0 || t.dueDate.slice(0, 7) === monthKey;
           });
-        } else if (periodDef.minDays !== undefined) {
-          visible = visible.filter((t) => !t.dueDate || daysLeftOf(t) >= periodDef.minDays);
         }
       }      if (tagFilter !== 'all') visible = visible.filter((t) => t.tag === tagFilter);
       const keyword = (search || '').trim().toLowerCase();
