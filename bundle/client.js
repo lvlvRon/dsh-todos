@@ -253,7 +253,7 @@ select.todo-field{max-width:62px}
 .todo-del{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:0;pointer-events:none;width:26px;height:26px;border-radius:6px;border:none;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;display:grid;place-items:center}
 .todo-row:hover .todo-del{opacity:1;pointer-events:auto}
 /* ---- \u884C\u5185\u7F16\u8F91 ---- */
-.todo-edit{display:flex;flex-direction:column;gap:9px;padding:13px 14px;border:1px solid var(--td-accent-ring);border-radius:11px;background:var(--td-accent-weak);margin:3px 0 10px}
+.todo-edit{display:flex;flex-direction:column;gap:9px;padding:13px 14px;border:1px solid var(--td-accent-ring);border-radius:11px;background:var(--td-accent-weak);margin:3px auto 10px}
 .todo-edit-title{width:100%;border:none;background:none;font-family:inherit;font-size:15.5px;font-weight:500;line-height:1.4;color:var(--dsw-alias-label-primary);outline:none;padding:2px 0}
 .todo-edit-fields{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
 .todo-edit .todo-field{font-size:13px;padding:5px 8px;border-radius:7px}
