@@ -78,6 +78,30 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('create') >= 0) {
+    setTimeout(function () {
+      var d = location.hash.indexOf('nofill') >= 0 ? null : document.querySelector('.todo-field[data-miss="1"]');
+      if (d) {
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(d, '2026-11-24');
+        d.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      setTimeout(function () {
+        var b = document.querySelector('.todo-btn-primary');
+        if (b && !b.disabled) b.click();
+      }, 250);
+    }, 3400);
+  }
+  if (location.hash.indexOf('refill') >= 0) {
+    setTimeout(function () {
+      var d = document.querySelector('.todo-field[data-miss="1"]');
+      if (d) {
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(d, '2026-11-25');
+        d.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }, 4700);
+  }
   if (location.hash.indexOf('cal') >= 0) {
     var segs = document.querySelectorAll('.todo-head .todo-seg');
     var viewSeg = segs[segs.length - 1];

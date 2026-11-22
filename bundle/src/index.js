@@ -142,6 +142,7 @@ window.__ModuleLoader__.load({
         important: Boolean(t && t.important),
         urgent: Boolean(t && t.urgent),
         notes: (t && t.notes) || '',
+        _created: false,
       };
     }
 
@@ -154,60 +155,92 @@ window.__ModuleLoader__.load({
         if (!ready) setItems((tasks || []).map(normalizeDraft));
       }, [tasks, ready]);
 
-      const missing = items.filter((it) => !it.dueDate).length;
+      const createdCount = items.filter((it) => it._created).length;
+      const missingCount = items.filter((it) => !it.dueDate).length;
+      /* 只提交字段齐全且尚未创建的 */
+      const pending = items.filter((it) => !it._created && it.dueDate);
       const patch = (i, key, value) => setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, [key]: value } : it)));
 
       const submit = async () => {
-        if (busy || missing > 0) return;
+        if (busy || !pending.length) return;
         setBusy(true);
-        try { await onCreate(items); } finally { setBusy(false); }
+        try {
+          const done = await onCreate(pending);
+          const marked = new Set(done && done.length ? done : pending.map((it) => it.title));
+          setItems((prev) => prev.map((it) => (marked.has(it.title) ? { ...it, _created: true } : it)));
+        } finally {
+          setBusy(false);
+        }
       };
+
+      const note = missingCount > 0
+        ? '还有 ' + missingCount + ' 项缺日期'
+        : (createdCount ? '已创建 ' + createdCount + ' 条' : '都齐了');
 
       return h('div', { className: 'todo-draft' },
         h('div', { className: 'todo-draft-head' },
           '识别到 ', h('b', null, String(items.length)), ' 条',
+          createdCount ? ' · 已创建 ' + createdCount : '',
           ready ? '' : ' · 解析中…'),
-        ...items.map((it, i) => h('div', { key: i, className: 'todo-draft-item' },
-          ready
-            ? h('input', {
-                className: 'todo-draft-title', value: it.title,
-                onChange: (e) => patch(i, 'title', e.target.value),
-              })
-            : h('div', { className: 'todo-draft-title' }, it.title),
+        ...items.map((it, i) => h('div', {
+          key: i,
+          className: 'todo-draft-item',
+          'data-done': it._created ? '1' : '0',
+        },
+          h('div', { className: 'todo-draft-itemhead' },
+            ready && !it._created
+              ? h('input', {
+                  className: 'todo-draft-title', value: it.title,
+                  onChange: (e) => patch(i, 'title', e.target.value),
+                })
+              : h('div', { className: 'todo-draft-title' }, it.title),
+            it._created ? h('span', { className: 'todo-done-badge' }, '已创建') : null),
           h('div', { className: 'todo-draft-fields' },
-            ready
+            ready && !it._created
               ? h('input', {
                   className: 'todo-field', type: 'date', 'data-miss': it.dueDate ? '0' : '1',
                   value: it.dueDate, onChange: (e) => patch(i, 'dueDate', e.target.value),
                 })
-              : h('span', { className: 'todo-field', 'data-miss': it.dueDate ? '0' : '1' }, it.dueDate || '缺日期'),
+              : h('span', {
+                  className: 'todo-field',
+                  'data-miss': !it._created && !it.dueDate ? '1' : '0',
+                }, it.dueDate || '缺日期'),
             h('input', {
               className: 'todo-field', type: 'time', value: it.dueTime,
-              style: { maxWidth: '78px' }, disabled: !ready,
+              style: { maxWidth: '78px' }, disabled: !ready || it._created,
               onChange: (e) => patch(i, 'dueTime', e.target.value),
             }),
             h('select', {
-              className: 'todo-field', value: it.tag, disabled: !ready,
+              className: 'todo-field', value: it.tag, disabled: !ready || it._created,
               onChange: (e) => patch(i, 'tag', e.target.value),
             }, ...Object.entries(TAG_META).map(([k, v]) => h('option', { key: k, value: k }, v.name))),
             h('div', { className: 'todo-draft-flags' },
               h('button', {
                 className: 'todo-toggle', 'data-on': it.important ? '1' : '0',
-                disabled: !ready, onClick: () => patch(i, 'important', !it.important),
+                disabled: !ready || it._created, onClick: () => patch(i, 'important', !it.important),
               }, '重要'),
               h('button', {
                 className: 'todo-toggle', 'data-on': it.urgent ? '1' : '0',
-                disabled: !ready, onClick: () => patch(i, 'urgent', !it.urgent),
+                disabled: !ready || it._created, onClick: () => patch(i, 'urgent', !it.urgent),
               }, '紧急')),
           ),
         )),
         ready
           ? h('div', { className: 'todo-draft-foot' },
-              h('span', { className: 'todo-draft-note', 'data-warn': missing ? '1' : '0' },
-                missing ? '还有 ' + missing + ' 项缺日期' : '都齐了'),
+              h('span', {
+                className: 'todo-draft-note',
+                'data-warn': pending.length && missingCount ? '1' : '0',
+                'data-ok': !pending.length && createdCount ? '1' : '0',
+              }, note),
               h('button', {
-                className: 'todo-btn-primary', disabled: missing > 0 || busy, onClick: submit,
-              }, busy ? '创建中…' : '全部创建'),
+                className: 'todo-btn-primary',
+                disabled: busy || !pending.length,
+                onClick: submit,
+              }, busy
+                ? '创建中…'
+                : (pending.length
+                    ? '创建 ' + pending.length + ' 条'
+                    : (createdCount ? '已创建 ✓' : '全部创建'))),
             )
           : null,
       );
@@ -740,7 +773,7 @@ window.__ModuleLoader__.load({
       }, []);
 
       const createDrafts = React.useCallback(async (items) => {
-        let ok = 0;
+        const done = [];
         let failed = 0;
         for (const it of items) {
           try {
@@ -757,13 +790,18 @@ window.__ModuleLoader__.load({
                 source: 'text',
               },
             });
-            ok += 1;
+            done.push(it.title);
           } catch (e) {
             failed += 1;
           }
         }
-        setToast({ text: failed ? `已创建 ${ok} 条，${failed} 条失败` : `已创建 ${ok} 条待办` });
+        setToast({
+          text: failed
+            ? `已创建 ${done.length} 条，${failed} 条失败`
+            : `已创建 ${done.length} 条待办`,
+        });
         await load();
+        return done;
       }, []);   /* load 在后面声明，依赖留空：调用时它已初始化，且其本身是稳定引用 */
       const inputRef = React.useRef(null);
       const rootRef = React.useRef(null);
