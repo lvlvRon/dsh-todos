@@ -62,9 +62,12 @@ function extractionPrompt(now) {
     '规则：',
     '1. 相对时间（明天/下周三/月底）必须换算成绝对日期。',
     '2. 没说日期的 dueDate 填 null，并把该条标题放进 missing 数组。',
-    '3. 有时限且影响大的 important=true；临近截止的 urgent=true。',
-    '4. tag 只能从 work/life/study/health/money 里选。',
-    '5. 一条待办一个 title，不要把多个事项塞进一条。',
+    '3. important 看影响面（做错或不做会不会影响别人/项目/钱）。',
+    '4. urgent 只看"是不是必须现在处理"：今天不处理会出事、被别人卡住、时间窗固定且挪不了。',
+    '   到期日近本身不算 urgent —— 临近截止只是时间信息，不要因此把 urgent 设为 true。',
+    '   宁可标 urgent=false 让人自己判断，也不要把所有快到期的都标成紧急。',
+    '5. tag 只能从 work/life/study/health/money 里选。',
+    '6. 一条待办一个 title，不要把多个事项塞进一条。',
     '今天是 ' + today + ' ' + WEEK_CN[now.getDay()] + '，时区 Asia/Shanghai。',
   ].join('\n');
 }

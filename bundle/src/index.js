@@ -822,10 +822,19 @@ window.__ModuleLoader__.load({
     function Row({ t, onToggle, onDelete, editing, onEdit, onSave, onCancelEdit }) {
       const q = t.important && t.urgent ? 1 : t.important ? 2 : t.urgent ? 3 : 4;
       const tag = TAG_META[t.tag] || TAG_META.work;
-      const isOverdue = t.dueDate && !t.done && t.dueDate < ymd(new Date());
+      const todayKey = ymd(new Date());
+      const daysLeft = t.dueDate
+        ? Math.round((Date.parse(t.dueDate) - Date.parse(todayKey)) / 86400000)
+        : null;
+      const isOverdue = Boolean(t.dueDate) && !t.done && t.dueDate < todayKey;
+      /* 临近只是显示信号：不进象限，只给时间标签上色 */
+      const isSoon = !t.done && !isOverdue && daysLeft !== null && daysLeft >= 0 && daysLeft <= 2;
       const when = t.dueTime
         ? t.dueTime
-        : (t.dueDate ? t.dueDate.slice(5).replace('-', '/') : '');
+        : (daysLeft === 0 ? '今天'
+          : daysLeft === 1 ? '明天'
+            : daysLeft === 2 ? '后天'
+              : (t.dueDate ? t.dueDate.slice(5).replace('-', '/') : ''));
 
       if (editing) {
         return h(EditRow, { t, onSave, onCancel: onCancelEdit });
@@ -852,6 +861,7 @@ window.__ModuleLoader__.load({
           className: 'todo-when',
           'data-hot': t.dueTime ? '1' : '0',
           'data-over': isOverdue ? '1' : '0',
+          'data-soon': isSoon ? '1' : '0',
         }, when) : null,
         h('button', { className: 'todo-del', onClick: () => onDelete(t), title: '删除' },
           h('svg', { viewBox: '0 0 24 24', width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' },
