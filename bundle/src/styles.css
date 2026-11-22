@@ -3,7 +3,13 @@
 --td-accent:#4d6bfe;--td-accent-weak:rgba(77,107,254,.10);--td-accent-soft:rgba(77,107,254,.16);--td-accent-ring:rgba(77,107,254,.28);
 --td-chip-bg:rgba(15,17,21,.055);--td-hover:rgba(15,17,21,.035)}
 .todo-root[data-tone="dark"]{--td-accent:#8ba0ff;--td-accent-weak:rgba(139,160,255,.16);--td-accent-soft:rgba(139,160,255,.22);--td-accent-ring:rgba(139,160,255,.38);--td-chip-bg:rgba(255,255,255,.09);--td-hover:rgba(255,255,255,.05)}
-.todo-head{height:52px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px 0 20px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.todo-head{height:52px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px 0 20px;border-bottom:1px solid var(--dsw-alias-border-l1);position:relative}
+/* 视图切换：图标 + 绝对居中，与宿主头部控件同高 */
+.todo-view-seg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:4px}
+.todo-view-btn{width:38px;height:30px;border-radius:6px;border:none;background:none;color:var(--dsw-alias-label-secondary);display:grid;place-items:center;cursor:pointer;padding:0;transition:background .13s,color .13s}
+.todo-view-btn:hover{color:var(--dsw-alias-label-primary)}
+.todo-view-btn[data-on="1"]{background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);box-shadow:0 1px 2px rgba(15,17,21,.08)}
+.todo-view-btn svg{width:18px;height:18px;display:block}
 .todo-title{font-size:14.5px;font-weight:600;white-space:nowrap}
 .todo-seg{display:flex;gap:2px;padding:3px;border-radius:8px;background:var(--td-chip-bg)}
 .todo-seg button{padding:4px 11px;border-radius:6px;font-size:12.5px;color:var(--dsw-alias-label-secondary);background:none;border:none;cursor:pointer;white-space:nowrap;font-family:inherit}

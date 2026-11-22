@@ -921,9 +921,27 @@ window.__ModuleLoader__.load({
                 onClick: () => setPeriod(p.id),
               }, p.label)))
           : null,
-        h('div', { className: 'todo-seg' },
-          h('button', { 'data-on': view === 'list' ? '1' : '0', onClick: () => setView('list') }, '列表'),
-          h('button', { 'data-on': view === 'calendar' ? '1' : '0', onClick: () => setView('calendar') }, '日历')),
+        h('div', { className: 'todo-seg todo-view-seg' },
+          h('button', {
+            className: 'todo-view-btn', 'data-on': view === 'list' ? '1' : '0',
+            onClick: () => setView('list'), title: '列表视图',
+          }, h('svg', {
+            viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8,
+            strokeLinecap: 'round', 'aria-hidden': true,
+          },
+            h('path', { d: 'M9 6.5h11M9 12h11M9 17.5h11' }),
+            h('circle', { cx: 4.5, cy: 6.5, r: 1.4, fill: 'currentColor', stroke: 'none' }),
+            h('circle', { cx: 4.5, cy: 12, r: 1.4, fill: 'currentColor', stroke: 'none' }),
+            h('circle', { cx: 4.5, cy: 17.5, r: 1.4, fill: 'currentColor', stroke: 'none' }))),
+          h('button', {
+            className: 'todo-view-btn', 'data-on': view === 'calendar' ? '1' : '0',
+            onClick: () => setView('calendar'), title: '日历视图',
+          }, h('svg', {
+            viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8,
+            strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true,
+          },
+            h('rect', { x: 3.5, y: 5, width: 17, height: 15.5, rx: 2.5 }),
+            h('path', { d: 'M3.5 9.8h17M8 3v3.2M16 3v3.2' })))),
         h('span', { className: 'todo-pill' }, plateDone + ' / ' + plate.length),
       );
 
