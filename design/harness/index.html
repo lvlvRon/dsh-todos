@@ -78,6 +78,10 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('new') >= 0) {
+    var addBtn = document.querySelector('.todo-add');
+    if (addBtn) addBtn.click();
+  }
   if (location.hash.indexOf('choose') >= 0) {
     var tries3 = 0;
     var iv3 = setInterval(function () {

@@ -881,8 +881,7 @@ window.__ModuleLoader__.load({
       const [error, setError] = React.useState(null);
       const [period, setPeriod] = React.useState('today');
       const [tagFilter, setTagFilter] = React.useState('all');
-      const [adding, setAdding] = React.useState(false);
-      const [draft, setDraft] = React.useState('');
+      const [creating, setCreating] = React.useState(false);
       const [toast, setToast] = React.useState(null);
       const [search, setSearch] = React.useState(null);
       const [helpOpen, setHelpOpen] = React.useState(false);
@@ -1150,7 +1149,6 @@ window.__ModuleLoader__.load({
         await load();
         return done;
       }, []);   /* load 在后面声明，依赖留空：调用时它已初始化，且其本身是稳定引用 */
-      const inputRef = React.useRef(null);
       const rootRef = React.useRef(null);
 
       const load = React.useCallback(async () => {
@@ -1165,12 +1163,6 @@ window.__ModuleLoader__.load({
       }, []);
 
       React.useEffect(() => { load(); }, [load]);
-
-      React.useEffect(() => {
-        if (!adding) return;
-        const el = inputRef.current;
-        if (el) el.focus();
-      }, [adding]);
 
       React.useEffect(() => {
         if (!toast) return;
@@ -1308,24 +1300,38 @@ window.__ModuleLoader__.load({
         }
       };
 
-      const create = async () => {
-        const title = draft.trim();
-        if (!title) { setAdding(false); setDraft(''); return; }
-        setDraft('');
+      /* 手动创建：和编辑同一套界面，标题留空 */
+      const BLANK_TODO = {
+        id: null,
+        title: '',
+        dueDate: null,
+        dueTime: null,
+        tag: 'work',
+        important: false,
+        urgent: false,
+        done: false,
+        notes: null,
+      };
+
+      const createOne = async (next) => {
+        setCreating(false);
         try {
           await api('POST', 'upsert', {
             todo: {
-              title,
-              dueDate: todayStr,
-              tag: tagFilter === 'all' ? 'work' : tagFilter,
-              important: false, urgent: false, done: false,
+              title: next.title,
+              dueDate: next.dueDate || null,
+              dueTime: next.dueTime || null,
+              tag: next.tag,
+              important: Boolean(next.important),
+              urgent: Boolean(next.urgent),
+              done: false,
               source: 'manual',
             },
           });
           await load();
+          setToast({ text: '已添加「' + next.title + '」' });
         } catch (e) {
-          setToast({ text: '创建失败：' + e.message });
-          setDraft(title);
+          setToast({ text: '创建失败：' + ((e && e.message) || e) });
         }
       };
 
@@ -1391,8 +1397,7 @@ window.__ModuleLoader__.load({
             className: 'todo-tool', title: '新建待办',
             onClick: () => {
               setView('list');
-              setAdding(true);
-              setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 30);
+              setCreating(true);
             },
           },
             h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' },
@@ -1436,18 +1441,13 @@ window.__ModuleLoader__.load({
           }, h('i', { style: { background: tagFilter === k ? '#fff' : m.color } }), m.name)),
         ),
 
-        adding
-          ? h('input', {
-              ref: inputRef, className: 'todo-input', value: draft,
-              placeholder: '回车创建，Esc 取消',
-              onChange: (e) => setDraft(e.target.value),
-              onKeyDown: (e) => {
-                if (e.key === 'Enter') { e.preventDefault(); create(); }
-                else if (e.key === 'Escape') { setAdding(false); setDraft(''); }
-              },
-              onBlur: () => { if (!draft.trim()) setAdding(false); },
+        creating
+          ? h(EditRow, {
+              t: BLANK_TODO,
+              onSave: createOne,
+              onCancel: () => setCreating(false),
             })
-          : h('button', { className: 'todo-add', onClick: () => setAdding(true) }, '＋ 添加待办，回车创建'),
+          : h('button', { className: 'todo-add', onClick: () => setCreating(true) }, '＋ 添加待办'),
 
         error ? h('div', { className: 'todo-err' }, '加载失败：' + error) : null,
 
