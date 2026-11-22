@@ -43,6 +43,16 @@ export const conversationSchema = z.object({
   updatedAt: z.number(),
 });
 
+/** 重要日期：生日/纪念日。农历生日存「月+日」，每年现算 */
+export const eventSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  cal: z.enum(['lunar', 'solar']),
+  month: z.number(),
+  day: z.number(),
+  leap: z.boolean().nullish(),
+});
+
 export const todoSpec = {
   name: 'todo',
   version: versions.todo,
@@ -50,6 +60,7 @@ export const todoSpec = {
     todos: { valueSchema: todoSchema },
     settings: { valueSchema: settingsSchema },
     conversation: { valueSchema: conversationSchema },
+    events: { valueSchema: eventSchema },
   },
 };
 

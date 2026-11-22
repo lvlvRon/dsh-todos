@@ -130,6 +130,43 @@
       return reply({ ok: true, todo: created });
     }
 
+    if (u.includes('/api/todo/chat')) {
+      const tasks = [
+        { title: '跟王工对接口', dueDate: '2026-11-23', dueTime: '15:00', tag: 'work', important: true, urgent: true, notes: '明天下午三点' },
+        { title: '发出报价单', dueDate: '2026-11-27', dueTime: null, tag: 'work', important: true, urgent: false, notes: '周五前' },
+        { title: '去趟银行', dueDate: null, dueTime: null, tag: 'money', important: false, urgent: false, notes: '有空去' },
+      ];
+      const prose = '四件挤一天，累是正常的，不是你效率低。建议先把报价单的主体拉出来，细节明天补。';
+      const block = '<todo>' + JSON.stringify({ tasks, missing: ['去趟银行'] }) + '</todo>';
+      const enc = new TextEncoder();
+      let phase = 0;
+      let i = 0;
+      const stream = new ReadableStream({
+        start(c) {
+          const timer = setInterval(() => {
+            if (phase === 0) {
+              if (i < block.length) {
+                c.enqueue(enc.encode('event: delta\ndata: ' + JSON.stringify({ text: block.slice(i, i + 10) }) + '\n\n'));
+                i += 10;
+              } else {
+                phase = 1;
+                i = 0;
+                c.enqueue(enc.encode('event: draft\ndata: ' + JSON.stringify({ tasks, missing: ['去趟银行'] }) + '\n\n'));
+              }
+            } else if (i < prose.length) {
+              c.enqueue(enc.encode('event: delta\ndata: ' + JSON.stringify({ text: prose.slice(i, i + 8) }) + '\n\n'));
+              i += 8;
+            } else {
+              clearInterval(timer);
+              c.enqueue(enc.encode('event: finish\ndata: {"reason":"stop"}\n\n'));
+              c.close();
+            }
+          }, 30);
+        },
+      });
+      return Promise.resolve(new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }));
+    }
+
     if (u.includes('/api/todo/extract')) {
       const tasks = [
         { title: '跟王工对接口', dueDate: '2026-11-23', dueTime: '15:00', tag: 'work', important: true, urgent: true, notes: '明天下午三点' },

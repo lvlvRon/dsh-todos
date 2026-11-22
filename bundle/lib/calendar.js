@@ -133,8 +133,26 @@ export function labelOf(date) {
   return { text: LUNAR_DAYS[lunar.day - 1] || '', cls: '', lunar };
 }
 
+/** 这一天命中的重要日期：农历按当年农历月日匹配，公历按月日匹配 */
+export function eventsOn(date, lunar, events) {
+  if (!Array.isArray(events) || !events.length) return [];
+  const mm = date.getMonth() + 1;
+  const dd = date.getDate();
+  return events.filter((e) => {
+    if (!e) return false;
+    if (e.cal === 'solar') return e.month === mm && e.day === dd;
+    if (!lunar || lunar.month !== e.month || lunar.day !== e.day) return false;
+    if (!e.leap) return lunar.leap === false;
+    /* 策略 A：该年有该闰月就走闰月，没有就走同名平月 */
+    const ly = lunar.year - TABLE.from;
+    const lc = TABLE.leap[ly];
+    const leapMonth = lc === '0' ? 0 : ('abc'.includes(lc) ? 10 + 'abc'.indexOf(lc) : Number(lc));
+    return leapMonth === e.month ? lunar.leap === true : lunar.leap === false;
+  });
+}
+
 /** 生成 7×6 的月网格（含上下月补位） */
-export function buildMonth(year, month) {
+export function buildMonth(year, month, events) {
   const startDow = new Date(year, month - 1, 1).getDay();
   const gridStart = new Date(year, month - 1, 1 - startDow);
   const cells = [];
@@ -149,6 +167,7 @@ export function buildMonth(year, month) {
       kind: info.cls,
       lunarMonth: info.lunar ? info.lunar.month : null,
       lunarDay: info.lunar ? info.lunar.day : null,
+      events: eventsOn(d, info.lunar, events).map((e) => e.label),
     });
   }
   return cells;

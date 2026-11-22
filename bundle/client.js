@@ -124,6 +124,7 @@ window.__ModuleLoader__.load({
 .todo-cal-pills{display:flex;flex-direction:column;gap:2px;min-height:0}
 .todo-cal-pill{font-size:10px;line-height:1.5;padding:1px 4px;border-radius:3px;background:var(--td-chip-bg);color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .todo-cal-pill.is-done{text-decoration:line-through;opacity:.6}
+.todo-cal-pill.is-event{background:color-mix(in oklab, #c2255c 14%, transparent);color:#c2255c;font-weight:500}
 .todo-cal-more{font-size:10px;color:var(--dsw-alias-label-secondary);opacity:.8;padding-left:2px}
 .todo-cal-picker{position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:252px;padding:10px;border-radius:10px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);box-shadow:0 12px 32px -16px rgba(0,0,0,.45)}
 .todo-cal-picker select{width:100%;font-family:inherit;font-size:12.5px;padding:4px 6px;border-radius:6px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);outline:none}
@@ -402,6 +403,16 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** 兜底：即使服务端没过滤，也不把 <todo> 块显示给用户 */
+    function cleanText(text) {
+      return String(text || '')
+        .replace(/<todo>[\s\S]*?<\/todo>/g, '')
+        .replace(/<\/?todo>/g, '')
+        .replace(/^\s*<\s*(?!todo>)/, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+
     function renderMessage(m, key, onCreate) {
       if (m.role === 'user') {
         return h('div', { key, className: 'todo-msg' },
@@ -411,10 +422,11 @@ window.__ModuleLoader__.load({
               : null,
             m.text));
       }
+      const shown = cleanText(m.text);
       return h('div', { key, className: 'todo-ai' },
         h('div', { className: 'todo-ai-avatar' }, '步'),
         h('div', { className: 'todo-ai-body' },
-          m.text ? h('p', null, m.text) : null,
+          shown ? h('p', null, shown) : null,
           m.drafts && m.drafts.length
             ? h(DraftCard, { tasks: m.drafts, ready: Boolean(m.ready), onCreate })
             : null,
@@ -482,6 +494,9 @@ window.__ModuleLoader__.load({
                         + (c.kind === 'fest' ? ' is-fest' : c.kind === 'term' ? ' is-term' : ''),
                     }, c.label)),
                   h('div', { className: 'todo-cal-pills' },
+                    ...(c.events || []).map((label, k) => h('div', {
+                      key: 'e' + k, className: 'todo-cal-pill is-event', title: label,
+                    }, label)),
                     ...items.slice(0, 3).map((t) => h('div', {
                       key: t.id,
                       className: 'todo-cal-pill' + (t.done ? ' is-done' : ''),

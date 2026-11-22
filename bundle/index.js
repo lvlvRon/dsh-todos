@@ -65,6 +65,7 @@ export async function apply(ctx) {
   const table = domain.table('todos');
   const settings = domain.table('settings');
   const conversations = domain.table('conversation');
+  const events = domain.table('events');
   const MODEL_KEY = 'chat-model';
   const CONV_KEY = 'default';
   const HISTORY_LIMIT = 12;
@@ -326,7 +327,13 @@ export async function apply(ctx) {
         if (!(y >= TABLE_RANGE.from && y <= TABLE_RANGE.to) || !(m >= 1 && m <= 12)) {
           return fail(res, 400, 'year/month out of supported range (' + TABLE_RANGE.from + '-' + TABLE_RANGE.to + ')');
         }
-        send(res, 200, { ok: true, y, m, cells: buildMonth(y, m), range: TABLE_RANGE });
+        send(res, 200, {
+          ok: true,
+          y,
+          m,
+          cells: buildMonth(y, m, [...events.entries()].map(([, v]) => v)),
+          range: TABLE_RANGE,
+        });
       } catch (e) {
         fail(res, 500, 'build month failed: ' + (e && e.message));
       }
@@ -470,6 +477,59 @@ export async function apply(ctx) {
         try { sse.event('error', { message: String((e && e.message) || e) }); } catch (x) { /* ignore */ }
       } finally {
         sse.close();
+      }
+    },
+  });
+
+  /* 重要日期（农历生日/纪念日）*/
+  route({
+    kind: 'exact',
+    path: '/api/todo/events',
+    handler: (req, res) => {
+      if (!guard(req, res)) return;
+      send(res, 200, { ok: true, events: [...events.entries()].map(([, v]) => v) });
+    },
+  });
+
+  route({
+    kind: 'exact',
+    path: '/api/todo/event',
+    handler: async (req, res) => {
+      if (!guard(req, res, { mutating: true })) return;
+      try {
+        const body = await readJson(req);
+        const input = body && body.event ? body.event : body;
+        if (!input || !input.label || !input.cal || !input.month || !input.day) {
+          return fail(res, 400, 'label / cal / month / day are required');
+        }
+        const id = input.id || ('e_' + Math.random().toString(36).slice(2, 10));
+        const event = {
+          id,
+          label: String(input.label),
+          cal: input.cal === 'lunar' ? 'lunar' : 'solar',
+          month: Number(input.month),
+          day: Number(input.day),
+          leap: input.cal === 'lunar' ? Boolean(input.leap) : null,
+        };
+        await events.put(id, event);
+        send(res, 200, { ok: true, event });
+      } catch (e) {
+        fail(res, 400, 'save event failed: ' + (e && e.message));
+      }
+    },
+  });
+
+  route({
+    kind: 'exact',
+    path: '/api/todo/event-remove',
+    handler: async (req, res) => {
+      if (!guard(req, res, { mutating: true })) return;
+      try {
+        const { id } = await readJson(req);
+        if (!id) return fail(res, 400, 'id is required');
+        send(res, 200, { ok: true, removed: await events.delete(id) });
+      } catch (e) {
+        fail(res, 400, 'remove event failed: ' + (e && e.message));
       }
     },
   });
