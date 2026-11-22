@@ -161,7 +161,14 @@
         { title: '发出报价单', dueDate: '2026-11-27', dueTime: null, tag: 'work', important: true, urgent: false, notes: '周五前' },
         { title: '去趟银行', dueDate: null, dueTime: null, tag: 'money', important: false, urgent: false, notes: '有空去' },
       ];
-      const prose = '四件挤一天，累是正常的，不是你效率低。建议先把报价单的主体拉出来，细节明天补。';
+      const prose = '**四件挤一天**，累是正常的，不是你*效率低*。\n\n'
+        + '建议顺序：\n'
+        + '1. 先把报价单的主体拉出来（约 40 分钟）\n'
+        + '2. 细节明天早上补，`npm run build` 那步可以放到明早\n'
+        + '3. 晚上留点空，别拖到凌晨\n\n'
+        + '> 明天 15:00 跟王工对接口，提前 15 分钟过一遍接口相关的东西。\n\n'
+        + '---\n\n'
+        + '要我把「准备接口材料」也加一条吗？';
       const block = '<todo>' + JSON.stringify({ tasks, missing: ['去趟银行'] }) + '</todo>';
       const enc = new TextEncoder();
       let phase = 0;

@@ -246,6 +246,136 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /* ============================================================
+       轻量 Markdown：解析成 React 元素，不用 innerHTML
+       ============================================================ */
+    const MD_INLINE = /(\*\*([^*]+)\*\*|__([^_]+)__|~~([^~]+)~~|`([^`]+)`|\*([^*\n]+)\*|_([^_\n]+)_|\[([^\]]+)\]\(([^)\s]+)\))/g;
+
+    function mdInline(text, keyBase) {
+      const out = [];
+      let last = 0;
+      let m;
+      MD_INLINE.lastIndex = 0;
+      while ((m = MD_INLINE.exec(text))) {
+        if (m.index > last) out.push(text.slice(last, m.index));
+        const k = keyBase + '-' + m.index;
+        if (m[2] !== undefined) out.push(h('strong', { key: k }, m[2]));
+        else if (m[3] !== undefined) out.push(h('strong', { key: k }, m[3]));
+        else if (m[4] !== undefined) out.push(h('del', { key: k }, m[4]));
+        else if (m[5] !== undefined) out.push(h('code', { key: k, className: 'todo-md-code' }, m[5]));
+        else if (m[6] !== undefined) out.push(h('em', { key: k }, m[6]));
+        else if (m[7] !== undefined) out.push(h('em', { key: k }, m[7]));
+        else if (m[8] !== undefined) {
+          out.push(h('a', {
+            key: k, href: m[9], target: '_blank', rel: 'noreferrer noopener',
+          }, m[8]));
+        }
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) out.push(text.slice(last));
+      return out;
+    }
+
+    function mdParagraph(text, keyBase) {
+      const lines = text.split('\n');
+      const nodes = [];
+      lines.forEach((line, i) => {
+        if (i) nodes.push(h('br', { key: 'br' + i }));
+        nodes.push(...mdInline(line, keyBase + 'p' + i));
+      });
+      return nodes;
+    }
+
+    function mdBlocks(src) {
+      const lines = String(src || '').split('\n');
+      const blocks = [];
+      let list = null;
+      let i = 0;
+      const flush = () => { if (list) { blocks.push(list); list = null; } };
+
+      while (i < lines.length) {
+        const raw = lines[i];
+        const t = raw.trim();
+
+        if (/^```/.test(t)) {
+          flush();
+          const body = [];
+          i += 1;
+          while (i < lines.length && !/^```/.test(lines[i].trim())) { body.push(lines[i]); i += 1; }
+          i += 1;
+          blocks.push({ type: 'code', text: body.join('\n') });
+          continue;
+        }
+        if (!t) { flush(); i += 1; continue; }
+
+        let m;
+        if ((m = /^(#{1,4})\s+(.*)$/.exec(t))) {
+          flush();
+          blocks.push({ type: 'h', level: m[1].length, text: m[2] });
+          i += 1;
+          continue;
+        }
+        if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { flush(); blocks.push({ type: 'hr' }); i += 1; continue; }
+        if ((m = /^>\s?(.*)$/.exec(t))) {
+          flush();
+          blocks.push({ type: 'quote', text: m[1] });
+          i += 1;
+          continue;
+        }
+        if ((m = /^[-*+]\s+(.*)$/.exec(t))) {
+          if (!list || list.ordered) { flush(); list = { type: 'list', ordered: false, items: [] }; }
+          list.items.push(m[1]);
+          i += 1;
+          continue;
+        }
+        if ((m = /^\d+[.)]\s+(.*)$/.exec(t))) {
+          if (!list || !list.ordered) { flush(); list = { type: 'list', ordered: true, items: [] }; }
+          list.items.push(m[1]);
+          i += 1;
+          continue;
+        }
+
+        const para = [t];
+        i += 1;
+        while (i < lines.length) {
+          const nt = lines[i].trim();
+          if (!nt) break;
+          if (/^(#{1,4}\s|>\s?|[-*+]\s|\d+[.)]\s|```|-{3,}$)/.test(nt)) break;
+          para.push(nt);
+          i += 1;
+        }
+        flush();
+        blocks.push({ type: 'p', text: para.join('\n') });
+      }
+      flush();
+      return blocks;
+    }
+
+    function Markdown({ text }) {
+      const blocks = mdBlocks(text);
+      return h('div', { className: 'todo-md' },
+        ...blocks.map((b, idx) => {
+          const key = 'b' + idx;
+          if (b.type === 'code') {
+            return h('pre', { key, className: 'todo-md-pre' }, h('code', null, b.text));
+          }
+          if (b.type === 'hr') return h('hr', { key, className: 'todo-md-hr' });
+          if (b.type === 'h') {
+            return h('div', { key, className: 'todo-md-h todo-md-h' + b.level }, ...mdInline(b.text, key));
+          }
+          if (b.type === 'quote') {
+            return h('blockquote', { key, className: 'todo-md-quote' }, ...mdInline(b.text, key));
+          }
+          if (b.type === 'list') {
+            const items = b.items.map((it, k) => h('li', { key: 'i' + k }, ...mdInline(it, key + 'i' + k)));
+            return b.ordered
+              ? h('ol', { key, className: 'todo-md-list' }, ...items)
+              : h('ul', { key, className: 'todo-md-list' }, ...items);
+          }
+          return h('p', { key }, ...mdParagraph(b.text, key));
+        }));
+    }
+
     /** 兜底：即使服务端没过滤，也不把 <todo> 块显示给用户 */
     function cleanText(text) {
       return String(text || '')
@@ -269,7 +399,7 @@ window.__ModuleLoader__.load({
       return h('div', { key, className: 'todo-ai' },
         h('div', { className: 'todo-ai-avatar' }, '步'),
         h('div', { className: 'todo-ai-body' },
-          shown ? h('p', null, shown) : null,
+          shown ? h(Markdown, { text: shown }) : null,
           m.drafts && m.drafts.length
             ? h(DraftCard, { tasks: m.drafts, ready: Boolean(m.ready), onCreate })
             : null,
