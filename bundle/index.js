@@ -637,9 +637,29 @@ export async function apply(ctx) {
   route({
     kind: 'exact',
     path: '/api/todo/conversation',
-    handler: (req, res) => {
+    handler: async (req, res) => {
       if (!guard(req, res)) return;
       const conv = conversations.get(CONV_KEY) || { messages: [], summary: null, updatedAt: null };
+
+      /* 顺便算一次「下一轮大概会用掉多少上下文」，供面板显示 */
+      let context = null;
+      try {
+        const selection = currentModel();
+        const system = buildSystemPrompt({
+          now: new Date(),
+          todos: [...table.entries()].map(([, v]) => v),
+          summary: conv.summary || '',
+          transcript: (conv.messages || []).slice(-HISTORY_LIMIT),
+        });
+        const llm = ctx.get('llm');
+        const total = llm && selection
+          ? await contextWindowOf(llm, selection.provider, selection.model)
+          : 0;
+        context = { used: estimateTokens([system]), total };
+      } catch (e) {
+        context = null;
+      }
+
       send(res, 200, {
         ok: true,
         messages: (conv.messages || []).slice(-60).map((m) => ({
@@ -657,6 +677,7 @@ export async function apply(ctx) {
         total: (conv.messages || []).length,
         summary: conv.summary || null,
         updatedAt: conv.updatedAt || null,
+        context,
       });
     },
   });

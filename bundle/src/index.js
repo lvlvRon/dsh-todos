@@ -916,7 +916,9 @@ window.__ModuleLoader__.load({
         let alive = true;
         api('GET', 'conversation')
           .then((d) => {
-            if (!alive || !d || !Array.isArray(d.messages) || !d.messages.length) return;
+            if (!alive || !d) return;
+            if (d.context) setCtxInfo(d.context);
+            if (!Array.isArray(d.messages) || !d.messages.length) return;
             const list = d.messages.map((m, i) => {
               const next = d.messages[i + 1];
               /* 下一句用户消息就是某个选项 → 视为已作答 */
@@ -1131,7 +1133,8 @@ window.__ModuleLoader__.load({
         try {
           await api('POST', 'conversation-clear', {});
           setMessages([]);
-          setCtxInfo(null);
+          const d = await api('GET', 'conversation').catch(() => null);
+          setCtxInfo(d && d.context ? d.context : null);
         } catch (e) {
           setToast({ text: '清空失败：' + ((e && e.message) || e) });
         }
