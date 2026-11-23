@@ -34,6 +34,13 @@
 .todo-help-keys{display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--dsw-alias-label-secondary);padding-bottom:6px}
 .todo-kbd{font-family:inherit;font-size:10.5px;padding:1px 6px;border-radius:4px;border:1px solid var(--dsw-alias-border-l2);border-bottom-width:2px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
 .todo-help-foot{padding:10px 16px 12px;font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary);background:var(--td-chip-bg);border-radius:0 0 12px 12px}
+/* 显示已完成：独立开关，不与时间段同级 */
+.todo-done-toggle{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:4px 10px;border-radius:7px;border:1px solid var(--dsw-alias-border-l1);background:none;color:var(--dsw-alias-label-secondary);font-size:12px;font-family:inherit;cursor:pointer}
+.todo-done-toggle:hover{background:var(--td-hover);color:var(--dsw-alias-label-primary)}
+.todo-done-box{position:relative;width:11px;height:11px;border-radius:3px;border:1.5px solid var(--dsw-alias-state-idle-primary);display:block;flex:none}
+.todo-done-toggle[data-on="1"]{color:var(--td-accent);border-color:var(--td-accent-ring);background:var(--td-accent-weak)}
+.todo-done-toggle[data-on="1"] .todo-done-box{background:var(--td-accent);border-color:var(--td-accent)}
+.todo-done-toggle[data-on="1"] .todo-done-box::after{content:"";position:absolute;left:2.5px;top:0;width:3px;height:6px;border:1.5px solid #fff;border-top:0;border-left:0;transform:rotate(42deg)}
 .todo-title{font-size:14.5px;font-weight:600;white-space:nowrap}
 .todo-seg{display:flex;gap:2px;padding:3px;border-radius:8px;background:var(--td-chip-bg)}
 .todo-seg button{padding:4px 11px;border-radius:6px;font-size:12.5px;color:var(--dsw-alias-label-secondary);background:none;border:none;cursor:pointer;white-space:nowrap;font-family:inherit}

@@ -129,7 +129,6 @@ window.__ModuleLoader__.load({
       { id: 'week', label: '本周' },
       { id: 'month', label: '本月' },
       { id: 'all', label: '全部' },
-      { id: 'done', label: '已完成', doneOnly: true },
     ];
 
     /* 列表内的分节：按剩余天数把未完成项分到四段 */
@@ -1165,6 +1164,7 @@ window.__ModuleLoader__.load({
       const [todos, setTodos] = React.useState(null);
       const [error, setError] = React.useState(null);
       const [period, setPeriod] = React.useState('all');
+      const [showDone, setShowDone] = React.useState(false);
       const [tagFilter, setTagFilter] = React.useState('all');
       const [creating, setCreating] = React.useState(false);
       const importRef = React.useRef(null);
@@ -1676,23 +1676,26 @@ window.__ModuleLoader__.load({
       const daysToWeekEnd = Math.round((Date.parse(weekEnd) - Date.parse(todayStr)) / 86400000);
       const monthKey = todayStr.slice(0, 7);
 
-      let visible;
-      if (periodDef.doneOnly) {
-        visible = decorated.filter((t) => t.done);
-      } else {
-        visible = decorated.filter((t) => !t.done);
-        if (periodDef.id === 'today') {
-          visible = visible.filter((t) => { const dl = daysLeftOf(t, todayStr); return dl !== null && dl <= 0; });
-        } else if (periodDef.id === 'week') {
-          visible = visible.filter((t) => { const dl = daysLeftOf(t, todayStr); return dl !== null && dl <= daysToWeekEnd; });
-        } else if (periodDef.id === 'month') {
-          visible = visible.filter((t) => {
-            const dl = daysLeftOf(t, todayStr);
-            if (dl === null) return false;
-            return dl <= 0 || t.dueDate.slice(0, 7) === monthKey;
-          });
-        }
-      }      if (tagFilter !== 'all') visible = visible.filter((t) => t.tag === tagFilter);
+      /* 时间段匹配：未完成与已完成共用同一套规则 */
+      const inPeriod = (t) => {
+        if (periodDef.id === 'all') return true;
+        const dl = daysLeftOf(t, todayStr);
+        if (dl === null) return false;
+        if (periodDef.id === 'today') return dl <= 0;
+        if (periodDef.id === 'week') return dl <= daysToWeekEnd;
+        return dl <= 0 || t.dueDate.slice(0, 7) === monthKey;   // month
+      };
+
+      let visible = decorated.filter((t) => !t.done && inPeriod(t));
+      const doneVisible = showDone
+        ? decorated.filter((t) => t.done && inPeriod(t)).sort((a, b) => {
+          const ad = a.dueDate || '';
+          const bd = b.dueDate || '';
+          return ad === bd ? 0 : (ad < bd ? 1 : -1);   // 日期倒序，未排期排最后
+        })
+        : [];
+
+      if (tagFilter !== 'all') visible = visible.filter((t) => t.tag === tagFilter);
       const keyword = (search || '').trim().toLowerCase();
       if (keyword) {
         visible = visible.filter((t) => (t.title || '').toLowerCase().includes(keyword)
@@ -1779,6 +1782,11 @@ window.__ModuleLoader__.load({
         .map((g) => ({ ...g, items: visible.filter((t) => t._kind === g.key) }))
         .filter((g) => g.items.length > 0);
 
+      /* 勾选「已完成」后，在末尾追加一节 */
+      if (doneVisible.length) {
+        groups.push({ key: 'done', label: '已完成', alert: false, items: doneVisible });
+      }
+
       const head = h('div', { className: 'todo-head' },
         h('div', { className: 'todo-title' }, '待办'),
         view === 'list'
@@ -1788,6 +1796,13 @@ window.__ModuleLoader__.load({
                 'data-on': period === p.id ? '1' : '0',
                 onClick: () => setPeriod(p.id),
               }, p.label)))
+          : null,
+        view === 'list'
+          ? h('button', {
+              className: 'todo-done-toggle', 'data-on': showDone ? '1' : '0',
+              title: showDone ? '隐藏已完成' : '显示已完成',
+              onClick: () => setShowDone((v) => !v),
+            }, h('span', { className: 'todo-done-box' }), '已完成')
           : null,
         h('div', { className: 'todo-seg todo-view-seg' },
           h('button', {
