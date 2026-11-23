@@ -7,6 +7,8 @@
  */
 
 
+import { readFileSync, readdirSync } from 'node:fs';
+
 import { todoSpec, normalize, compare, now } from './lib/domain.js';
 import { send, fail, readJson, guard, openSse } from './lib/channel.js';
 import { buildMonth, TABLE_RANGE, nextOccurrence } from './lib/calendar.js';
@@ -98,6 +100,17 @@ export async function apply(ctx) {
   const settings = domain.table('settings');
   const conversations = domain.table('conversation');
   const events = domain.table('events');
+  const personas = domain.table('persona');
+  const DEFAULT_NAME = '小步';
+
+  /** 当前助手形象 */
+  function currentPersona() {
+    const p = personas.get('default');
+    return {
+      name: (p && p.name) || DEFAULT_NAME,
+      avatar: p && p.avatar ? p.avatar : null,
+    };
+  }
   const MODEL_KEY = 'chat-model';
   const CONV_KEY = 'default';
   const HISTORY_LIMIT = 12;
@@ -349,6 +362,7 @@ export async function apply(ctx) {
           todos: [...table.entries()].map(([, v]) => v),
           summary: conv.summary || '',
           transcript: (conv.messages || []).slice(-HISTORY_LIMIT),
+          personaName: currentPersona().name,
         });
 
         const textParts = [system, ...content.filter((c) => c.type === 'text').map((c) => c.text)];
@@ -609,6 +623,7 @@ export async function apply(ctx) {
           todos: [...table.entries()].map(([, v]) => v),
           summary: conv.summary || '',
           transcript: (conv.messages || []).slice(-HISTORY_LIMIT),
+          personaName: currentPersona().name,
         });
         const llm = ctx.get('llm');
         const total = llm && selection
@@ -765,6 +780,71 @@ export async function apply(ctx) {
         send(res, 200, { ok: true, added, updated, skipped, eventsAdded });
       } catch (e) {
         fail(res, 400, '导入失败：' + (e && e.message));
+      }
+    },
+  });
+
+  /* 助手形象：名称 + 头像 */
+  route({
+    kind: 'exact',
+    path: '/api/todo/persona',
+    handler: (req, res) => {
+      if (!guard(req, res)) return;
+      const dir = new URL('./assets/avatars/', import.meta.url);
+      let names = [];
+      try {
+        names = readdirSync(dir).filter((n) => n.toLowerCase().endsWith('.png'));
+      } catch (e) {
+        names = [];
+      }
+      send(res, 200, {
+        ok: true,
+        persona: currentPersona(),
+        presets: names.sort().map((n) => ({
+          id: 'preset:' + n.replace(/\.png$/i, ''),
+          url: '/api/todo/avatar?name=' + encodeURIComponent(n),
+        })),
+      });
+    },
+  });
+
+  route({
+    kind: 'exact',
+    path: '/api/todo/persona-save',
+    handler: async (req, res) => {
+      if (!guard(req, res, { mutating: true })) return;
+      try {
+        const body = await readJson(req, 4 * 1024 * 1024);
+        const name = String((body && body.name) || '').trim().slice(0, 20) || DEFAULT_NAME;
+        const avatar = body && body.avatar ? String(body.avatar) : null;
+        if (avatar && avatar.length > 3 * 1024 * 1024) return fail(res, 400, '头像过大');
+        await personas.put('default', { name, avatar });
+        send(res, 200, { ok: true, persona: currentPersona() });
+      } catch (e) {
+        fail(res, 400, '保存失败：' + (e && e.message));
+      }
+    },
+  });
+
+  /* 预设头像静态资源（白名单文件名，防路径穿越）*/
+  route({
+    kind: 'exact',
+    path: '/api/todo/avatar',
+    handler: (req, res) => {
+      if (!guard(req, res)) return;
+      const url = new URL(req.url, 'http://localhost');
+      const name = String(url.searchParams.get('name') || '');
+      if (!/^[a-z0-9_-]+\.png$/i.test(name)) return fail(res, 400, 'bad avatar name');
+      try {
+        const buf = readFileSync(new URL('./assets/avatars/' + name, import.meta.url));
+        res.writeHead(200, {
+          'content-type': 'image/png',
+          'content-length': buf.length,
+          'cache-control': 'public, max-age=86400',
+        });
+        res.end(buf);
+      } catch (e) {
+        fail(res, 404, 'avatar not found');
       }
     },
   });

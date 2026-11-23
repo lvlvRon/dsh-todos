@@ -78,6 +78,10 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('persona') >= 0) {
+    var av = document.querySelector('.todo-ava-btn');
+    if (av) av.click();
+  }
   if (location.hash.indexOf('ann') >= 0) {
     var segs2 = document.querySelectorAll('.todo-head .todo-seg');
     var vseg = segs2[segs2.length - 1];

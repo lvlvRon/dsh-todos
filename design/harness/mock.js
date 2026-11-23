@@ -78,6 +78,24 @@
       return reply({ ok: true, y, m, cells, range: { from: 1900, to: 2100 } });
     }
 
+    if (u.includes('/api/todo/persona')) {
+      const svg = (c) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="' + c + '"/></svg>',
+      );
+      return reply({
+        ok: true,
+        persona: { name: '小步', avatar: null },
+        presets: [
+          { id: 'preset:01_robot', url: svg('#4d6bfe') },
+          { id: 'preset:02_cloud', url: svg('#22a06b') },
+          { id: 'preset:03_cat', url: svg('#c2255c') },
+          { id: 'preset:04_jelly', url: svg('#f59e0b') },
+          { id: 'preset:05_sprout', url: svg('#12b886') },
+          { id: 'preset:06_origami', url: svg('#7048e8') },
+        ],
+      });
+    }
+
     if (u.includes('/api/todo/events')) {
       return reply({
         ok: true,

@@ -176,12 +176,12 @@ window.__ModuleLoader__.load({
       },
     ];
 
-    function renderHelp() {
+    function renderHelp(persona) {
       return h('div', { className: 'todo-help' },
         h('div', { className: 'todo-help-head' },
-          h('div', { className: 'todo-avatar todo-help-avatar' }, '步'),
+          avatarNode(persona, 'todo-avatar todo-help-avatar'),
           h('div', null,
-            h('div', { className: 'todo-help-title' }, '待办助手'),
+            h('div', { className: 'todo-help-title' }, (persona && persona.name) || '待办助手'),
             h('div', { className: 'todo-help-sub' }, '清单 · 日历 · 对话，都在这一块面板里'))),
         ...HELP_SECTIONS.map((sec) => h('div', { key: sec.title, className: 'todo-help-sec' },
           h('div', { className: 'todo-help-sec-title' }, sec.title),
@@ -470,7 +470,24 @@ window.__ModuleLoader__.load({
         .trim();
     }
 
-    function renderMessage(m, key, onCreate, onPreview, onChoose, knownTitles) {
+    /** 助手头像：有图用图，没图用名字首字 */
+    function avatarSrc(persona) {
+      if (!persona || !persona.avatar) return null;
+      return persona.avatar.startsWith('preset:')
+        ? '/api/todo/avatar?name=' + encodeURIComponent(persona.avatar.slice(7) + '.png')
+        : persona.avatar;
+    }
+
+    function avatarNode(persona, className) {
+      const src = avatarSrc(persona);
+      if (src) {
+        return h('div', { className: className + ' todo-ava-img' }, h('img', { src, alt: '' }));
+      }
+      const name = (persona && persona.name ? persona.name : '步').trim();
+      return h('div', { className }, name ? name.slice(0, 1) : '步');
+    }
+
+    function renderMessage(m, key, onCreate, onPreview, onChoose, knownTitles, persona) {
       if (m.role === 'user') {
         const hasImgs = Boolean(m.images && m.images.length);
         /* 只有图时不要再显示「（截图）」占位文字 */
@@ -491,7 +508,7 @@ window.__ModuleLoader__.load({
       }
       const shown = cleanText(m.text);
       return h('div', { key, className: 'todo-ai' },
-        h('div', { className: 'todo-ai-avatar' }, '步'),
+        avatarNode(persona, 'todo-ai-avatar'),
         h('div', { className: 'todo-ai-body' },
           shown ? h(Markdown, { text: shown }) : null,
           m.drafts && m.drafts.length
@@ -733,10 +750,13 @@ window.__ModuleLoader__.load({
       menuOpen, onToggleMenu, onPick,
       attachments, onPasteImages, onRemoveAttachment, onCreateDrafts, ctxInfo, onPreview,
       efforts, onPickEffort, onClear, onChoose, knownTitles, taRef, refTodo, onClearRef,
+      persona, onOpenPersona, personaOpen, personaDraft, presets,
+      onPersonaDraft, onSavePersona, onClosePersona, onAvatarFile,
     }) {
       const threadRef = React.useRef(null);
       const wrapRef = React.useRef(null);
       const fileRef = React.useRef(null);
+      const avatarRef = React.useRef(null);
       const [menuView, setMenuView] = React.useState('root');
 
       /* 每次打开菜单都回到根视图 */
@@ -759,9 +779,12 @@ window.__ModuleLoader__.load({
 
       return h('aside', { className: 'todo-chat' },
         h('header', { className: 'todo-chat-head' },
-          h('div', { className: 'todo-avatar' }, '步'),
+          h('button', {
+            className: 'todo-ava-btn', title: '助手形象设置',
+            onClick: () => onOpenPersona(),
+          }, avatarNode(persona, 'todo-avatar')),
           h('div', { className: 'todo-chat-id' },
-            h('b', null, '小步'),
+            h('b', null, persona.name),
             h('span', { className: 'todo-chat-status' }, h('i'), '待办助手 · 常驻对话'),
           ),
           messages.length
@@ -771,6 +794,54 @@ window.__ModuleLoader__.load({
               }, '清空')
             : null,
         ),
+        personaOpen && personaDraft
+          ? h('div', { className: 'todo-persona-pop' },
+              h('div', { className: 'todo-persona-head' },
+                h('span', { className: 'todo-persona-title' }, '助手形象'),
+                h('button', {
+                  className: 'todo-icon-btn', title: '关闭', style: { marginLeft: 'auto' },
+                  onClick: onClosePersona,
+                }, '✕')),
+              h('div', { className: 'todo-persona-preview-wrap' },
+                avatarNode(personaDraft, 'todo-persona-preview')),
+              h('div', { className: 'todo-persona-lab' }, '名称'),
+              h('input', {
+                className: 'todo-field', style: { width: '100%', maxWidth: 'none' },
+                value: personaDraft.name, maxLength: 20, placeholder: '小步',
+                onChange: (e) => onPersonaDraft({ ...personaDraft, name: e.target.value }),
+              }),
+              h('div', { className: 'todo-persona-lab' }, '头像'),
+              h('div', { className: 'todo-persona-grid' },
+                ...presets.map((p) => h('button', {
+                  key: p.id,
+                  className: 'todo-persona-item',
+                  'data-on': personaDraft.avatar === p.id ? '1' : '0',
+                  title: '使用这个头像',
+                  onClick: () => onPersonaDraft({ ...personaDraft, avatar: p.id }),
+                }, h('img', { src: p.url, alt: '' }))),
+                h('button', {
+                  className: 'todo-persona-item todo-persona-upload', title: '上传自定义头像',
+                  onClick: () => { if (avatarRef.current) avatarRef.current.click(); },
+                }, '＋'),
+                h('input', {
+                  ref: avatarRef, type: 'file', accept: 'image/*', style: { display: 'none' },
+                  onChange: (e) => {
+                    const f = e.target.files && e.target.files[0];
+                    if (f) onAvatarFile(f);
+                    e.target.value = '';
+                  },
+                })),
+              h('div', { className: 'todo-persona-actions' },
+                personaDraft.avatar
+                  ? h('button', {
+                      className: 'todo-ann-danger',
+                      onClick: () => onPersonaDraft({ ...personaDraft, avatar: null }),
+                    }, '移除头像')
+                  : null,
+                h('span', { style: { flex: 1 } }),
+                h('button', { className: 'todo-btn-ghost', onClick: onClosePersona }, '取消'),
+                h('button', { className: 'todo-btn-primary', onClick: onSavePersona }, '保存')))
+          : null,
         h('div', { className: 'todo-thread', ref: threadRef },
           messages.length === 0 && !busy
             ? h('div', { className: 'todo-chat-empty' },
@@ -778,7 +849,7 @@ window.__ModuleLoader__.load({
                 h('br'),
                 '我会把它拆成待办')
             : null,
-          ...messages.map((m, i) => renderMessage(m, i, onCreateDrafts, onPreview, onChoose, knownTitles)),
+          ...messages.map((m, i) => renderMessage(m, i, onCreateDrafts, onPreview, onChoose, knownTitles, persona)),
           busy ? h('div', { className: 'todo-typing' }, h('i'), h('i'), h('i')) : null,
         ),
         h('div', { className: 'todo-composer' },
@@ -1101,6 +1172,46 @@ window.__ModuleLoader__.load({
       const dataWrapRef = React.useRef(null);
       const [dataMenu, setDataMenu] = React.useState(false);
       const [refTodo, setRefTodo] = React.useState(null);
+
+      /* —— 助手形象 —— */
+      const [persona, setPersona] = React.useState({ name: '小步', avatar: null });
+      const [presets, setPresets] = React.useState([]);
+      const [personaOpen, setPersonaOpen] = React.useState(false);
+      const [personaDraft, setPersonaDraft] = React.useState(null);
+
+      React.useEffect(() => {
+        api('GET', 'persona')
+          .then((d) => {
+            if (d && d.persona) setPersona(d.persona);
+            if (d && Array.isArray(d.presets)) setPresets(d.presets);
+          })
+          .catch(() => { /* 用默认形象 */ });
+      }, []);
+
+      const openPersona = () => { setPersonaDraft({ ...persona }); setPersonaOpen(true); };
+      const closePersona = () => setPersonaOpen(false);
+      const savePersona = async () => {
+        if (!personaDraft) return;
+        try {
+          const d = await api('POST', 'persona-save', {
+            name: personaDraft.name,
+            avatar: personaDraft.avatar,
+          });
+          setPersona(d.persona);
+          setPersonaOpen(false);
+          setToast({ text: '助手形象已更新' });
+        } catch (e) {
+          setToast({ text: '保存失败：' + ((e && e.message) || e) });
+        }
+      };
+      const onAvatarFile = async (file) => {
+        try {
+          const img = await compressImage(file, 128, 0.9);
+          setPersonaDraft((d) => (d ? { ...d, avatar: img.preview } : d));
+        } catch (e) {
+          setToast({ text: '头像处理失败：' + ((e && e.message) || e) });
+        }
+      };
 
       /* 导入导出菜单：点外部关闭 */
       React.useEffect(() => {
@@ -1773,7 +1884,7 @@ window.__ModuleLoader__.load({
             h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinejoin: 'round' },
               h('rect', { x: 3.6, y: 5, width: 16.8, height: 14, rx: 2.6 }),
               h('path', { d: 'M14.6 5v14' })))),
-        helpOpen ? renderHelp() : null,
+        helpOpen ? renderHelp(persona) : null,
       );
 
       const body = h('div', { className: 'todo-body' },
@@ -1886,6 +1997,15 @@ window.__ModuleLoader__.load({
             onRemoveAttachment: (i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i)),
             refTodo,
             onClearRef: () => setRefTodo(null),
+            persona,
+            onOpenPersona: openPersona,
+            personaOpen,
+            personaDraft,
+            presets,
+            onPersonaDraft: setPersonaDraft,
+            onSavePersona: savePersona,
+            onClosePersona: closePersona,
+            onAvatarFile,
             onCreateDrafts: createDrafts,
             ctxInfo,
             onPreview: setPreview,

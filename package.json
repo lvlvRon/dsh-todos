@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-plugin-todo",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "description": "待办与日程面板：农历/节气、AI 抽取、列表与日历双视图",
@@ -34,6 +34,7 @@
     "cordis.patch.yml",
     "lib",
     "data",
+    "assets",
     "locale",
     "docs",
     "icon.svg",
