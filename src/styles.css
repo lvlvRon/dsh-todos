@@ -328,6 +328,12 @@ select.todo-field{max-width:62px}
 .todo-when[data-tier="over"]{background:color-mix(in oklab, var(--dsw-alias-state-error-primary) 22%, transparent);color:var(--dsw-alias-state-error-primary);font-weight:600}
 .todo-when[data-tier="done"]{background:var(--td-chip-bg);color:var(--dsw-alias-label-secondary);font-weight:400}
 .todo-row[data-done="1"] .todo-when{background:var(--td-chip-bg);color:var(--dsw-alias-label-secondary);font-weight:400}
+/* 进度小字：与日期标签分开一层 */
+.todo-prog{font-size:11px;line-height:1;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none;letter-spacing:.01em}
+.todo-prog[data-tier="late"],.todo-prog[data-tier="over"]{color:var(--dsw-alias-state-error-primary);font-weight:600}
+.todo-prog[data-tier="start"]{color:#c2410c;font-weight:600}
+.todo-prog[data-tier="done"]{color:var(--dsw-alias-label-secondary);font-weight:400}
+.todo-row:hover .todo-prog{opacity:0}
 .todo-del{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:0;pointer-events:none;width:26px;height:26px;border-radius:6px;border:none;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;display:grid;place-items:center}
 .todo-row:hover .todo-del{opacity:1;pointer-events:auto}
 /* 发送到助手：悬停出现在删除按钮左边 */
@@ -347,6 +353,7 @@ select.todo-field{max-width:62px}
 .todo-edit-actions .todo-btn-ghost{font-size:13px;padding:6px 15px;border-radius:8px}
 .todo-edit-actions .todo-btn-primary{font-size:13px;padding:6px 18px;border-radius:8px;margin-left:0}
 .todo-edit-dirty{font-size:12px;color:var(--dsw-alias-state-warn-primary);flex:none}
+.todo-start-chip{color:var(--td-accent);background:var(--td-accent-weak);border-color:transparent;white-space:nowrap}
 .todo-est{display:inline-flex;align-items:center;gap:4px;flex:none}
 .todo-est-lab{font-size:11px;color:var(--dsw-alias-label-secondary)}
 .todo-est-unit{font-size:11px;color:var(--dsw-alias-label-secondary)}

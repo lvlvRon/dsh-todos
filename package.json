@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-plugin-todo",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "type": "module",
   "description": "待办与日程面板：农历/节气、AI 抽取、列表与日历双视图",

@@ -460,15 +460,12 @@ export async function apply(ctx) {
                 const next = { ...target };
                 if (args.title !== undefined) next.title = String(args.title);
                 if (args.dueDate !== undefined) next.dueDate = args.dueDate ? String(args.dueDate) : null;
+                if (args.startDate !== undefined) next.startDate = args.startDate ? String(args.startDate) : null;
                 if (args.dueTime !== undefined) next.dueTime = args.dueTime ? String(args.dueTime) : null;
                 if (args.tag !== undefined) next.tag = String(args.tag);
                 if (args.important !== undefined) next.important = Boolean(args.important);
                 if (args.urgent !== undefined) next.urgent = Boolean(args.urgent);
                 if (args.done !== undefined) next.done = Boolean(args.done);
-                if (args.estimateMinutes !== undefined) {
-                  const m = Number(args.estimateMinutes);
-                  next.estimateMinutes = Number.isFinite(m) && m > 0 ? Math.round(m) : null;
-                }
                 if (args.notes !== undefined) next.notes = args.notes == null ? null : String(args.notes);
                 const saved = normalize(next, target);
                 if (!saved.title) {

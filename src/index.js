@@ -204,7 +204,7 @@ window.__ModuleLoader__.load({
         important: Boolean(t && t.important),
         urgent: Boolean(t && t.urgent),
         notes: (t && t.notes) || '',
-        estimateMinutes: (t && t.estimateMinutes) || null,
+        startDate: (t && t.startDate) || null,
         suggestedDueDate: (t && t.suggestedDueDate) || null,
         _created: false,
       };
@@ -289,6 +289,12 @@ window.__ModuleLoader__.load({
                   className: 'todo-field',
                   'data-miss': !it._created && !it.dueDate ? '1' : '0',
                 }, it.dueDate || '缺日期'),
+            it.startDate
+              ? h('span', {
+                className: 'todo-field todo-start-chip',
+                title: '开始日 ' + it.startDate,
+              }, dateShort(it.startDate) + ' 起')
+              : null,
             h('input', {
               className: 'todo-field', type: 'time', value: it.dueTime,
               style: { maxWidth: '78px' }, disabled: !ready || it._created,
@@ -1005,7 +1011,7 @@ window.__ModuleLoader__.load({
         tag: TAG_META[t.tag] ? t.tag : 'work',
         important: Boolean(t.important),
         urgent: Boolean(t.urgent),
-        estimateMinutes: t.estimateMinutes || null,
+        startDate: t.startDate || '',
       }), [t]);
 
       const [d, setD] = React.useState(initial);
@@ -1019,12 +1025,7 @@ window.__ModuleLoader__.load({
         || d.tag !== initial.tag
         || d.important !== initial.important
         || d.urgent !== initial.urgent
-        || d.estimateMinutes !== initial.estimateMinutes;
-
-      const estUnit = d.dueDate ? '天' : '小时';
-      const estInput = d.estimateMinutes
-        ? (estUnit === '天' ? Number((d.estimateMinutes / 1440).toFixed(2)) : Math.round(d.estimateMinutes / 60))
-        : '';
+        || d.startDate !== initial.startDate;
 
       React.useEffect(() => {
         const el = inputRef.current;
@@ -1060,7 +1061,7 @@ window.__ModuleLoader__.load({
             tag: d.tag,
             important: d.important,
             urgent: d.urgent,
-            estimateMinutes: d.estimateMinutes || null,
+            startDate: d.startDate || null,
           });
         } finally {
           setBusy(false);
@@ -1103,18 +1104,11 @@ window.__ModuleLoader__.load({
             onClick: () => patch('urgent', !d.urgent),
           }, '紧急'),
           h('span', { className: 'todo-est' },
-            h('span', { className: 'todo-est-lab' }, '工期'),
+            h('span', { className: 'todo-est-lab' }, '开始'),
             h('input', {
-              className: 'todo-field', type: 'number', min: 0, step: 0.5,
-              style: { maxWidth: '58px' }, value: estInput, placeholder: '—',
-              onChange: (e) => {
-                const n = Number(e.target.value);
-                patch('estimateMinutes', Number.isFinite(n) && n > 0
-                  ? Math.round(n * (estUnit === '天' ? 1440 : 60))
-                  : null);
-              },
-            }),
-            h('span', { className: 'todo-est-unit' }, estUnit)),
+              className: 'todo-field', type: 'date', value: d.startDate || '',
+              onChange: (e) => patch('startDate', e.target.value),
+            })),
           dirty ? h('span', { className: 'todo-edit-dirty' }, '未保存') : null,
           h('div', { className: 'todo-edit-actions' },
             h('button', { className: 'todo-btn-ghost', onClick: onCancel }, '取消'),
@@ -1124,54 +1118,67 @@ window.__ModuleLoader__.load({
       );
     }
 
-    /** 工期文案：有截止日且≥1天用「天」，否则用「小时」 */
-    function fmtEstimate(minutes, hasDate) {
-      if (!minutes) return '';
-      if (hasDate && minutes >= 1440) {
-        const d = minutes / 1440;
-        return (Number.isInteger(d) ? d : d.toFixed(1)) + ' 天';
-      }
-      const hText = minutes / 60;
-      return (Number.isInteger(hText) ? hText : hText.toFixed(1)) + ' 小时';
+    /** 日期短写：2026-11-25 → 11/25 */
+    function dateShort(iso) {
+      return iso ? iso.slice(5).replace('-', '/') : '';
     }
 
     function Row({ t, onToggle, onDelete, editing, onEdit, onSave, onCancelEdit, onToChat }) {
       const q = t.important && t.urgent ? 1 : t.important ? 2 : t.urgent ? 3 : 4;
       const tag = TAG_META[t.tag] || TAG_META.work;
       const todayKey = ymd(new Date());
-      const daysLeft = t.dueDate
-        ? Math.round((Date.parse(t.dueDate) - Date.parse(todayKey)) / 86400000)
-        : null;
-      const isOverdue = Boolean(t.dueDate) && !t.done && t.dueDate < todayKey;
-      /* 临近只是显示信号：不进象限，只给时间标签上色 */
-      const isSoon = !t.done && !isOverdue && daysLeft !== null && daysLeft >= 0 && daysLeft <= 2;
 
-      /* —— 工期 + 四档色 —— */
-      const estMin = t.estimateMinutes || null;
-      const deadline = t.dueDate || t.suggestedDueDate || null;
+      /* —— 时间轴：开始日 → 持续天数 → 截止日 —— */
+      const startISO = t.startDate || null;
+      const dueISO = t.dueDate || t.suggestedDueDate || null;
       const isSuggested = !t.dueDate && Boolean(t.suggestedDueDate);
-      const remDays = deadline
-        ? Math.round((Date.parse(deadline) - Date.parse(todayKey)) / 86400000)
-        : null;
+      const dayOf = (iso) => (iso ? Math.round((Date.parse(iso) - Date.parse(todayKey)) / 86400000) : null);
+      const toStart = dayOf(startISO);
+      const toDue = dayOf(dueISO);
 
-      let tier = 'normal';
-      if (t.done) tier = 'done';
-      else if (remDays !== null && remDays < 0) tier = 'over';
-      else if (estMin && remDays !== null) {
-        const estDays = estMin / 1440;
-        tier = remDays <= estDays ? 'late' : (remDays <= estDays * 1.5 ? 'start' : 'normal');
-      } else if (isSoon) {
-        tier = 'soon';
+      /* 阶段判定 */
+      let phase = 'none';
+      if (t.done) phase = 'done';
+      else if (dueISO && toDue < 0) phase = 'over';
+      else if (startISO && toStart > 0) phase = 'pending';
+      else if (dueISO && toDue === 0) phase = 'today';
+      else if (dueISO && toDue === 1) phase = 'tomorrow';
+      else if (startISO) phase = 'active';
+      else if (dueISO) phase = 'dated';
+
+      /* 展示：日期 时间（主）+ 进度（次），截止日永远在 */
+      const dueText = dueISO
+        ? (isSuggested ? '建议 ' : '') + dateShort(dueISO) + (t.dueTime ? ' ' + t.dueTime : '')
+        : '';
+
+      let progText = '';
+      if (t.done) progText = '已完成';
+      else if (phase === 'over') progText = '逾期 ' + Math.abs(toDue) + ' 天';
+      else if (phase === 'today') progText = '今天截止';
+      else if (phase === 'tomorrow') progText = '明天截止';
+      else if (phase === 'active' && startISO && dueISO) {
+        const total = Math.max(1, toDue - toStart + 1);
+        const dayNo = Math.min(total, Math.max(1, 1 - toStart));
+        progText = '第 ' + dayNo + '/' + total + ' 天';
+      } else if (phase === 'active' && startISO) {
+        progText = '已开始 ' + Math.max(1, 1 - toStart) + ' 天';
+      } else if (phase === 'pending') {
+        progText = dateShort(startISO) + ' 起';
       }
 
-      const dateLabel = deadline ? deadline.slice(5).replace('-', '/') : '';
-      const estLabel = estMin ? fmtEstimate(estMin, Boolean(t.dueDate)) : '';
-      const when = [
-        isSuggested ? '建议 ' + dateLabel : dateLabel,
-        t.dueTime,
-      ].filter(Boolean).join(' ');
-      const whenText = (when ? when : '') + (estLabel ? (when ? ' · ' : '') + estLabel : '');
-      const fullWhen = [deadline || '', t.dueTime || '', estLabel].filter(Boolean).join(' ');
+      const fullWhen = [startISO ? '开始 ' + startISO : '', dueISO ? '截止 ' + dueISO : '']
+        .filter(Boolean).join(' · ');
+
+      /* 四档色：富余 / 后半程 / 来不及 / 逾期 */
+      let tier = 'normal';
+      if (phase === 'done') tier = 'done';
+      else if (phase === 'over') tier = 'over';
+      else if (phase === 'today') tier = 'late';
+      else if (phase === 'tomorrow') tier = 'start';
+      else if (phase === 'active' && startISO && dueISO) {
+        const span = Math.max(1, toDue - toStart);
+        tier = (-toStart / span) >= 0.75 ? 'start' : 'normal';
+      }
 
       if (editing) {
         return h(EditRow, { t, onSave, onCancel: onCancelEdit });
@@ -1194,12 +1201,17 @@ window.__ModuleLoader__.load({
         h('span', { className: 'todo-tag' },
           h('i', { style: { background: tag.color } }), tag.name),
         h('span', { className: 'todo-fill' }),
-        whenText ? h('span', {
+        dueText ? h('span', {
           className: 'todo-when',
           title: fullWhen,
           'data-tier': tier,
           'data-hot': t.dueTime ? '1' : '0',
-        }, whenText) : null,
+        }, dueText) : null,
+        progText ? h('span', {
+          className: 'todo-prog',
+          'data-tier': tier,
+          title: fullWhen,
+        }, progText) : null,
         h('button', { className: 'todo-todel', onClick: () => onToChat(t), title: '发送到助手' },
           h('svg', { viewBox: '0 0 24 24', width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' },
             h('path', { d: 'M20 12.5a7.5 7.5 0 0 1-7.5 7.5H8l-4 3v-9.5A7.5 7.5 0 0 1 11.5 6H12a7.5 7.5 0 0 1 8 6.5z' }))),
@@ -1673,7 +1685,7 @@ window.__ModuleLoader__.load({
                 urgent: Boolean(it.urgent),
                 done: false,
                 notes: it.notes || null,
-                estimateMinutes: it.estimateMinutes || null,
+                startDate: it.startDate || null,
                 suggestedDueDate: it.suggestedDueDate || null,
                 source: 'text',
               },
