@@ -567,7 +567,7 @@ window.__ModuleLoader__.load({
       messages, busy, draft, onDraft, onSend, models, modelName, chipLabel, effortName,
       menuOpen, onToggleMenu, onPick,
       attachments, onPasteImages, onRemoveAttachment, onCreateDrafts, ctxInfo, onPreview,
-      efforts, onPickEffort, onClear, onChoose, knownTitles,
+      efforts, onPickEffort, onClear, onChoose, knownTitles, taRef, refTodo, onClearRef,
     }) {
       const threadRef = React.useRef(null);
       const wrapRef = React.useRef(null);
@@ -618,6 +618,17 @@ window.__ModuleLoader__.load({
         ),
         h('div', { className: 'todo-composer' },
           h('div', { className: 'todo-composer-inner' },
+            refTodo
+              ? h('div', { className: 'todo-ref-chip' },
+                  h('span', { className: 'todo-ref-label' }, '改这条'),
+                  h('span', { className: 'todo-ref-title' }, refTodo.title),
+                  h('span', { className: 'todo-ref-when' },
+                    [refTodo.dueDate || '未排期', refTodo.dueTime].filter(Boolean).join(' ')),
+                  h('button', {
+                    className: 'todo-ref-x', title: '取消引用',
+                    onClick: () => onClearRef(),
+                  }, '×'))
+              : null,
             attachments && attachments.length
               ? h('div', { className: 'todo-attach-rail' },
                   ...attachments.map((a, i) => h('div', { key: i, className: 'todo-attach' },
@@ -635,7 +646,7 @@ window.__ModuleLoader__.load({
                   )))
               : null,
             h('textarea', {
-              className: 'todo-textarea', rows: 2, value: draft,
+              className: 'todo-textarea', rows: 2, value: draft, ref: taRef,
               placeholder: '粘贴截图，或直接说，我来拆成待办',
               onChange: (e) => onDraft(e.target.value),
               onPaste: (e) => {
@@ -733,7 +744,7 @@ window.__ModuleLoader__.load({
               ctxInfo ? h(CtxRing, { used: ctxInfo.used, total: ctxInfo.total }) : null,
               h('button', {
                 className: 'todo-send', onClick: onSend,
-                disabled: busy || (!draft.trim() && !(attachments && attachments.length)),
+                disabled: busy || (!draft.trim() && !(attachments && attachments.length) && !refTodo),
                 title: '发送',
               }, h('svg', {
                 viewBox: '0 0 24 24', width: 15, height: 15, fill: 'none',
@@ -855,7 +866,7 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function Row({ t, onToggle, onDelete, editing, onEdit, onSave, onCancelEdit }) {
+    function Row({ t, onToggle, onDelete, editing, onEdit, onSave, onCancelEdit, onToChat }) {
       const q = t.important && t.urgent ? 1 : t.important ? 2 : t.urgent ? 3 : 4;
       const tag = TAG_META[t.tag] || TAG_META.work;
       const todayKey = ymd(new Date());
@@ -898,6 +909,9 @@ window.__ModuleLoader__.load({
           'data-over': isOverdue ? '1' : '0',
           'data-soon': isSoon ? '1' : '0',
         }, when) : null,
+        h('button', { className: 'todo-todel', onClick: () => onToChat(t), title: '发送到助手' },
+          h('svg', { viewBox: '0 0 24 24', width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' },
+            h('path', { d: 'M20 12.5a7.5 7.5 0 0 1-7.5 7.5H8l-4 3v-9.5A7.5 7.5 0 0 1 11.5 6H12a7.5 7.5 0 0 1 8 6.5z' }))),
         h('button', { className: 'todo-del', onClick: () => onDelete(t), title: '删除' },
           h('svg', { viewBox: '0 0 24 24', width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' },
             h('path', { d: 'M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13' }))),
@@ -918,8 +932,10 @@ window.__ModuleLoader__.load({
       const [tagFilter, setTagFilter] = React.useState('all');
       const [creating, setCreating] = React.useState(false);
       const importRef = React.useRef(null);
+      const composerRef = React.useRef(null);
       const dataWrapRef = React.useRef(null);
       const [dataMenu, setDataMenu] = React.useState(false);
+      const [refTodo, setRefTodo] = React.useState(null);
 
       /* 导入导出菜单：点外部关闭 */
       React.useEffect(() => {
@@ -1184,13 +1200,22 @@ window.__ModuleLoader__.load({
       }, [chatBusy]);
 
       const sendChat = React.useCallback(() => {
-        const text = chatDraft.trim();
+        const base = chatDraft.trim();
         const imgs = attachments;
-        if ((!text && imgs.length === 0) || chatBusy) return;
+        if ((!base && imgs.length === 0 && !refTodo) || chatBusy) return;
+
+        let text = base;
+        if (refTodo) {
+          const when = [refTodo.dueDate || '未排期', refTodo.dueTime].filter(Boolean).join(' ');
+          text = '【修改待办 ' + String(refTodo.id).slice(0, 8) + '】' + refTodo.title + '（' + when + '）'
+            + '\n' + (base || '请帮我改一下这条');
+        }
+
         setChatDraft('');
         setAttachments([]);
+        setRefTodo(null);
         runSend(text, imgs);
-      }, [chatDraft, attachments, chatBusy, runSend]);
+      }, [chatDraft, attachments, chatBusy, refTodo, runSend]);
 
       /* 点选项 = 用户说了这句话 */
       const chooseOption = React.useCallback((msgId, option) => {
@@ -1232,6 +1257,16 @@ window.__ModuleLoader__.load({
           await load();
         }
       }, []);   /* load 声明在后面，调用时已初始化 */
+
+      /* 把某条待办送进对话框：以引用块形式挂在输入框上方，不污染你打的字 */
+      const sendToChat = React.useCallback((t) => {
+        setChatCollapsed(false);
+        setRefTodo(t);
+        setTimeout(() => {
+          const el = composerRef.current;
+          if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+        }, 60);
+      }, []);
 
       const createDrafts = React.useCallback(async (items) => {
         const done = [];
@@ -1578,6 +1613,7 @@ window.__ModuleLoader__.load({
                     onEdit: (id) => setEditingId(id),
                     onSave: saveEdit,
                     onCancelEdit: () => setEditingId(null),
+                    onToChat: sendToChat,
                   })),
                 ))),
       );
@@ -1623,11 +1659,14 @@ window.__ModuleLoader__.load({
             attachments,
             onPasteImages,
             onRemoveAttachment: (i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i)),
+            refTodo,
+            onClearRef: () => setRefTodo(null),
             onCreateDrafts: createDrafts,
             ctxInfo,
             onPreview: setPreview,
             onClear: clearChat,
             onChoose: chooseOption,
+            taRef: composerRef,
             knownTitles: (todos || []).map((t) => t.title),
           }),
         ),

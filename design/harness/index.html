@@ -78,6 +78,10 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('tochat') >= 0) {
+    var chatBtn = document.querySelector('.todo-row .todo-todel');
+    if (chatBtn) chatBtn.click();
+  }
   if (location.hash.indexOf('new') >= 0) {
     var addBtn = document.querySelector('.todo-add');
     if (addBtn) addBtn.click();
