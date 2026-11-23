@@ -315,14 +315,18 @@ select.todo-field{max-width:62px}
 .todo-t{font-size:14px;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .todo-row[data-done="1"]{padding:5px 10px;background:none}
 .todo-row[data-done="1"]::before{display:none}
-.todo-row[data-done="1"] .todo-t{color:var(--dsw-alias-label-secondary);font-size:13.5px;font-weight:400;text-decoration:line-through;text-decoration-thickness:1.5px;text-decoration-color:currentColor}
+.todo-row[data-done="1"] .todo-t{color:var(--dsw-alias-label-secondary);font-size:13.5px;font-weight:400;text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:color-mix(in oklab, currentColor 55%, transparent)}
 .todo-tag{display:inline-flex;align-items:center;gap:5px;flex:none;font-size:10.5px;color:var(--dsw-alias-label-secondary);background:var(--td-chip-bg);border-radius:5px;padding:1px 6px}
 .todo-tag i{width:5px;height:5px;border-radius:50%;display:block}
 .todo-fill{flex:1;min-width:8px}
 .todo-when{font-size:11.5px;color:var(--dsw-alias-label-secondary);background:var(--td-chip-bg);border-radius:6px;padding:1.5px 7px;white-space:nowrap;flex:none}
 .todo-when[data-hot="1"]{color:var(--td-accent);background:var(--td-accent-weak);font-weight:500}
-.todo-when[data-over="1"]{background:rgba(229,72,77,.12);color:var(--dsw-alias-state-error-primary)}
-.todo-when[data-soon="1"]{background:color-mix(in oklab, var(--dsw-alias-state-warn-primary) 16%, transparent);color:var(--dsw-alias-state-warn-primary);font-weight:500}
+/* 工期四档色：富余 / 该开工 / 来不及 / 逾期 */
+.todo-when[data-tier="soon"]{background:color-mix(in oklab, var(--dsw-alias-state-warn-primary) 14%, transparent);color:var(--dsw-alias-state-warn-primary)}
+.todo-when[data-tier="start"]{background:color-mix(in oklab, #f97316 16%, transparent);color:#c2410c;font-weight:500}
+.todo-when[data-tier="late"]{background:color-mix(in oklab, var(--dsw-alias-state-error-primary) 14%, transparent);color:var(--dsw-alias-state-error-primary);font-weight:500}
+.todo-when[data-tier="over"]{background:color-mix(in oklab, var(--dsw-alias-state-error-primary) 22%, transparent);color:var(--dsw-alias-state-error-primary);font-weight:600}
+.todo-when[data-tier="done"]{background:var(--td-chip-bg);color:var(--dsw-alias-label-secondary);font-weight:400}
 .todo-row[data-done="1"] .todo-when{background:var(--td-chip-bg);color:var(--dsw-alias-label-secondary);font-weight:400}
 .todo-del{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:0;pointer-events:none;width:26px;height:26px;border-radius:6px;border:none;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;display:grid;place-items:center}
 .todo-row:hover .todo-del{opacity:1;pointer-events:auto}
@@ -343,6 +347,9 @@ select.todo-field{max-width:62px}
 .todo-edit-actions .todo-btn-ghost{font-size:13px;padding:6px 15px;border-radius:8px}
 .todo-edit-actions .todo-btn-primary{font-size:13px;padding:6px 18px;border-radius:8px;margin-left:0}
 .todo-edit-dirty{font-size:12px;color:var(--dsw-alias-state-warn-primary);flex:none}
+.todo-est{display:inline-flex;align-items:center;gap:4px;flex:none}
+.todo-est-lab{font-size:11px;color:var(--dsw-alias-label-secondary)}
+.todo-est-unit{font-size:11px;color:var(--dsw-alias-label-secondary)}
 .todo-btn-ghost{border:1px solid var(--dsw-alias-border-l1);background:none;border-radius:7px;font-size:12px;padding:3px 10px;cursor:pointer;font-family:inherit;color:var(--dsw-alias-label-secondary)}
 .todo-btn-ghost:hover{background:var(--td-hover);color:var(--dsw-alias-label-primary)}
 .todo-row:hover .todo-when{opacity:0}

@@ -204,6 +204,8 @@ window.__ModuleLoader__.load({
         important: Boolean(t && t.important),
         urgent: Boolean(t && t.urgent),
         notes: (t && t.notes) || '',
+        estimateMinutes: (t && t.estimateMinutes) || null,
+        suggestedDueDate: (t && t.suggestedDueDate) || null,
         _created: false,
       };
     }
@@ -1003,6 +1005,7 @@ window.__ModuleLoader__.load({
         tag: TAG_META[t.tag] ? t.tag : 'work',
         important: Boolean(t.important),
         urgent: Boolean(t.urgent),
+        estimateMinutes: t.estimateMinutes || null,
       }), [t]);
 
       const [d, setD] = React.useState(initial);
@@ -1015,7 +1018,13 @@ window.__ModuleLoader__.load({
         || d.dueTime !== initial.dueTime
         || d.tag !== initial.tag
         || d.important !== initial.important
-        || d.urgent !== initial.urgent;
+        || d.urgent !== initial.urgent
+        || d.estimateMinutes !== initial.estimateMinutes;
+
+      const estUnit = d.dueDate ? '天' : '小时';
+      const estInput = d.estimateMinutes
+        ? (estUnit === '天' ? Number((d.estimateMinutes / 1440).toFixed(2)) : Math.round(d.estimateMinutes / 60))
+        : '';
 
       React.useEffect(() => {
         const el = inputRef.current;
@@ -1051,6 +1060,7 @@ window.__ModuleLoader__.load({
             tag: d.tag,
             important: d.important,
             urgent: d.urgent,
+            estimateMinutes: d.estimateMinutes || null,
           });
         } finally {
           setBusy(false);
@@ -1092,6 +1102,19 @@ window.__ModuleLoader__.load({
             className: 'todo-toggle', 'data-on': d.urgent ? '1' : '0',
             onClick: () => patch('urgent', !d.urgent),
           }, '紧急'),
+          h('span', { className: 'todo-est' },
+            h('span', { className: 'todo-est-lab' }, '工期'),
+            h('input', {
+              className: 'todo-field', type: 'number', min: 0, step: 0.5,
+              style: { maxWidth: '58px' }, value: estInput, placeholder: '—',
+              onChange: (e) => {
+                const n = Number(e.target.value);
+                patch('estimateMinutes', Number.isFinite(n) && n > 0
+                  ? Math.round(n * (estUnit === '天' ? 1440 : 60))
+                  : null);
+              },
+            }),
+            h('span', { className: 'todo-est-unit' }, estUnit)),
           dirty ? h('span', { className: 'todo-edit-dirty' }, '未保存') : null,
           h('div', { className: 'todo-edit-actions' },
             h('button', { className: 'todo-btn-ghost', onClick: onCancel }, '取消'),
@@ -1099,6 +1122,17 @@ window.__ModuleLoader__.load({
               busy ? '保存中…' : '保存')),
         ),
       );
+    }
+
+    /** 工期文案：有截止日且≥1天用「天」，否则用「小时」 */
+    function fmtEstimate(minutes, hasDate) {
+      if (!minutes) return '';
+      if (hasDate && minutes >= 1440) {
+        const d = minutes / 1440;
+        return (Number.isInteger(d) ? d : d.toFixed(1)) + ' 天';
+      }
+      const hText = minutes / 60;
+      return (Number.isInteger(hText) ? hText : hText.toFixed(1)) + ' 小时';
     }
 
     function Row({ t, onToggle, onDelete, editing, onEdit, onSave, onCancelEdit, onToChat }) {
@@ -1111,10 +1145,33 @@ window.__ModuleLoader__.load({
       const isOverdue = Boolean(t.dueDate) && !t.done && t.dueDate < todayKey;
       /* 临近只是显示信号：不进象限，只给时间标签上色 */
       const isSoon = !t.done && !isOverdue && daysLeft !== null && daysLeft >= 0 && daysLeft <= 2;
-      /* 一律显示日期；有具体时间则日期 + 时间 */
-      const dateLabel = t.dueDate ? t.dueDate.slice(5).replace('-', '/') : '';
-      const when = [dateLabel, t.dueTime].filter(Boolean).join(' ');
-      const fullWhen = t.dueDate ? t.dueDate + (t.dueTime ? ' ' + t.dueTime : '') : '';
+
+      /* —— 工期 + 四档色 —— */
+      const estMin = t.estimateMinutes || null;
+      const deadline = t.dueDate || t.suggestedDueDate || null;
+      const isSuggested = !t.dueDate && Boolean(t.suggestedDueDate);
+      const remDays = deadline
+        ? Math.round((Date.parse(deadline) - Date.parse(todayKey)) / 86400000)
+        : null;
+
+      let tier = 'normal';
+      if (t.done) tier = 'done';
+      else if (remDays !== null && remDays < 0) tier = 'over';
+      else if (estMin && remDays !== null) {
+        const estDays = estMin / 1440;
+        tier = remDays <= estDays ? 'late' : (remDays <= estDays * 1.5 ? 'start' : 'normal');
+      } else if (isSoon) {
+        tier = 'soon';
+      }
+
+      const dateLabel = deadline ? deadline.slice(5).replace('-', '/') : '';
+      const estLabel = estMin ? fmtEstimate(estMin, Boolean(t.dueDate)) : '';
+      const when = [
+        isSuggested ? '建议 ' + dateLabel : dateLabel,
+        t.dueTime,
+      ].filter(Boolean).join(' ');
+      const whenText = (when ? when : '') + (estLabel ? (when ? ' · ' : '') + estLabel : '');
+      const fullWhen = [deadline || '', t.dueTime || '', estLabel].filter(Boolean).join(' ');
 
       if (editing) {
         return h(EditRow, { t, onSave, onCancel: onCancelEdit });
@@ -1137,13 +1194,12 @@ window.__ModuleLoader__.load({
         h('span', { className: 'todo-tag' },
           h('i', { style: { background: tag.color } }), tag.name),
         h('span', { className: 'todo-fill' }),
-        when ? h('span', {
+        whenText ? h('span', {
           className: 'todo-when',
           title: fullWhen,
+          'data-tier': tier,
           'data-hot': t.dueTime ? '1' : '0',
-          'data-over': isOverdue ? '1' : '0',
-          'data-soon': isSoon ? '1' : '0',
-        }, when) : null,
+        }, whenText) : null,
         h('button', { className: 'todo-todel', onClick: () => onToChat(t), title: '发送到助手' },
           h('svg', { viewBox: '0 0 24 24', width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' },
             h('path', { d: 'M20 12.5a7.5 7.5 0 0 1-7.5 7.5H8l-4 3v-9.5A7.5 7.5 0 0 1 11.5 6H12a7.5 7.5 0 0 1 8 6.5z' }))),
@@ -1617,6 +1673,8 @@ window.__ModuleLoader__.load({
                 urgent: Boolean(it.urgent),
                 done: false,
                 notes: it.notes || null,
+                estimateMinutes: it.estimateMinutes || null,
+                suggestedDueDate: it.suggestedDueDate || null,
                 source: 'text',
               },
             });

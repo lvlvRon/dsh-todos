@@ -465,6 +465,10 @@ export async function apply(ctx) {
                 if (args.important !== undefined) next.important = Boolean(args.important);
                 if (args.urgent !== undefined) next.urgent = Boolean(args.urgent);
                 if (args.done !== undefined) next.done = Boolean(args.done);
+                if (args.estimateMinutes !== undefined) {
+                  const m = Number(args.estimateMinutes);
+                  next.estimateMinutes = Number.isFinite(m) && m > 0 ? Math.round(m) : null;
+                }
                 if (args.notes !== undefined) next.notes = args.notes == null ? null : String(args.notes);
                 const saved = normalize(next, target);
                 if (!saved.title) {

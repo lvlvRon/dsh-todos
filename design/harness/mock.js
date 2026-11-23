@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 预览用 mock：拦截 fetch，返回真实形状的数据。
  * 数据与 DSH 里那几条保持一致，方便对比。
  */
@@ -25,14 +25,14 @@
   const state = {
     todos: [
       mk({ title: '交上周的报销单', dueDate: '2026-11-20', tag: 'money', important: true, urgent: true, source: 'screenshot' }),
-      mk({ title: '产品评审会 · 准备演示稿', dueDate: '2026-11-22', dueTime: '10:00', tag: 'work', important: true, urgent: true }),
+      mk({ title: '产品评审会 · 准备演示稿', dueDate: '2026-11-22', dueTime: '10:00', tag: 'work', important: true, urgent: true, estimateMinutes: 240 }),
       mk({ title: '给妈妈打个电话', dueDate: '2026-11-22', dueTime: '12:30', tag: 'life', important: true, urgent: false }),
       mk({ title: '回邮件 · 客户端 SDK 问题', dueDate: '2026-11-22', dueTime: '09:20', tag: 'work', done: true, urgent: true, important: false }),
-      mk({ title: '体检预约', dueDate: '2026-11-26', dueTime: '09:00', tag: 'health', important: true, urgent: false }),
-      mk({ title: '研究一下 DSH 插件文档', tag: 'study', important: false, urgent: false }),
+      mk({ title: '体检预约', dueDate: '2026-11-26', dueTime: '09:00', tag: 'health', important: true, urgent: false, estimateMinutes: 1440 }),
+      mk({ title: '研究一下 DSH 插件文档', tag: 'study', important: false, urgent: false, estimateMinutes: 60, suggestedDueDate: '2026-11-25' }),
       mk({ title: '准备周会材料', dueDate: '2026-11-22', dueTime: '08:30', tag: 'work', important: true, urgent: true, done: true }),
-      mk({ title: '三天内的示例：给中介回电', dueDate: '2026-11-24', dueTime: '11:00', tag: 'life' }),
-      mk({ title: '七天内的示例：续签合同', dueDate: '2026-11-26', dueTime: '14:00', tag: 'work', important: true }),
+      mk({ title: '三天内的示例：给中介回电', dueDate: '2026-11-24', dueTime: '11:00', tag: 'life', estimateMinutes: 2880 }),
+      mk({ title: '七天内的示例：续签合同', dueDate: '2026-11-26', dueTime: '14:00', tag: 'work', important: true, estimateMinutes: 2880 }),
       mk({ title: '以后的示例：年度体检', dueDate: '2026-12-18', dueTime: '09:30', tag: 'health' }),
     ],
   };
