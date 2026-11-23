@@ -444,7 +444,11 @@ window.__ModuleLoader__.load({
             : null,
           m.tools && m.tools.length
             ? h('div', { className: 'todo-tool-note' },
-                '已查询待办库 · ' + m.tools.map((t) => t.count + ' 条').join(' / '))
+                m.tools.map((t) => {
+                  if (t.name === 'update_todo') return '修改 ' + t.count + ' 条';
+                  if (t.name === 'delete_todo') return '删除 ' + t.count + ' 条';
+                  return '查询待办 ' + t.count + ' 条';
+                }).join(' · '))
             : null,
           m.ask && m.ask.length
             ? h('div', { className: 'todo-ask' },
@@ -1159,6 +1163,13 @@ window.__ModuleLoader__.load({
               setMessages((m) => m.map((x) => (x.id === aid
                 ? { ...x, tools: [...(x.tools || []), payload] }
                 : x)));
+            } else if (ev === 'mutated' && payload) {
+              setMessages((m) => m.map((x) => (x.id === aid ? { ...x, mutated: payload } : x)));
+              load();   // 让列表立刻反映助手的改动
+              const bits = [];
+              if (payload.updated) bits.push('修改 ' + payload.updated + ' 条');
+              if (payload.deleted) bits.push('删除 ' + payload.deleted + ' 条');
+              setToast({ text: '助手已' + bits.join('、') });
             } else if (ev === 'error' && payload) {
               setMessages((m) => m.map((x) => (x.id === aid ? { ...x, error: payload.message || '对话失败' } : x)));
             }

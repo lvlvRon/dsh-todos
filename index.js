@@ -10,7 +10,7 @@
 import { todoSpec, normalize, compare, now } from './lib/domain.js';
 import { send, fail, readJson, guard, openSse } from './lib/channel.js';
 import { buildMonth, TABLE_RANGE } from './lib/calendar.js';
-import { buildSystemPrompt, splitTasks, visibleText, TODO_QUERY_TOOL, runTodoQuery } from './lib/chat.js';
+import { buildSystemPrompt, splitTasks, visibleText, TODO_TOOLS, runTodoQuery } from './lib/chat.js';
 
 export const inject = ['webServer', 'storageDomain'];
 export const name = 'todo';
@@ -365,6 +365,7 @@ export async function apply(ctx) {
         let sent = 0;
         let rounds = 0;
         const usedTools = [];
+        const mutated = { updated: 0, deleted: 0 };
         const convo = [{ role: 'user', content }];
         const pad2 = (n) => String(n).padStart(2, '0');
         const todayStr = new Date().getFullYear() + '-' + pad2(new Date().getMonth() + 1) + '-' + pad2(new Date().getDate());
@@ -379,7 +380,7 @@ export async function apply(ctx) {
             reasoningEffort: selection.reasoningEffort || undefined,
             system,
             messages: convo,
-            tools: [TODO_QUERY_TOOL],
+            tools: TODO_TOOLS,
             signal: controller.signal,
           })) {
             if (chunk.type === 'text-delta') {
@@ -410,10 +411,61 @@ export async function apply(ctx) {
             })),
           });
 
+          /* 按 id 或 id 前缀定位一条待办 */
+          const resolveTodo = (raw) => {
+            const key = String(raw || '').trim();
+            if (!key) return null;
+            const all = [...table.entries()].map(([, v]) => v);
+            const exact = all.find((t) => t.id === key);
+            if (exact) return exact;
+            const hits = all.filter((t) => String(t.id).startsWith(key));
+            return hits.length === 1 ? hits[0] : null;
+          };
+
           for (const call of calls) {
             let result = { text: '未知工具：' + call.name, count: 0 };
+            let args = {};
+            try { args = JSON.parse(String(call.arguments || '{}')); } catch (e) { args = {}; }
+
             if (call.name === 'query_todos') {
               result = runTodoQuery([...table.entries()], call.arguments, todayStr);
+            } else if (call.name === 'delete_todo') {
+              const target = resolveTodo(args.id);
+              if (!target) {
+                result = { text: '找不到 id 为 ' + args.id + ' 的待办，请先用 query_todos 确认。', count: 0 };
+              } else {
+                await table.delete(target.id);
+                mutated.deleted += 1;
+                result = { text: '已删除「' + target.title + '」', count: 1 };
+              }
+            } else if (call.name === 'update_todo') {
+              const target = resolveTodo(args.id);
+              if (!target) {
+                result = { text: '找不到 id 为 ' + args.id + ' 的待办，请先用 query_todos 确认。', count: 0 };
+              } else {
+                const next = { ...target };
+                if (args.title !== undefined) next.title = String(args.title);
+                if (args.dueDate !== undefined) next.dueDate = args.dueDate ? String(args.dueDate) : null;
+                if (args.dueTime !== undefined) next.dueTime = args.dueTime ? String(args.dueTime) : null;
+                if (args.tag !== undefined) next.tag = String(args.tag);
+                if (args.important !== undefined) next.important = Boolean(args.important);
+                if (args.urgent !== undefined) next.urgent = Boolean(args.urgent);
+                if (args.done !== undefined) next.done = Boolean(args.done);
+                if (args.notes !== undefined) next.notes = args.notes == null ? null : String(args.notes);
+                const saved = normalize(next, target);
+                if (!saved.title) {
+                  result = { text: '标题不能为空，未修改。', count: 0 };
+                } else {
+                  await table.put(saved.id, saved);
+                  mutated.updated += 1;
+                  result = {
+                    text: '已更新「' + saved.title + '」：'
+                      + (saved.dueDate || '无日期') + (saved.dueTime ? ' ' + saved.dueTime : '')
+                      + (saved.done ? '（已完成）' : ''),
+                    count: 1,
+                  };
+                }
+              }
             }
             usedTools.push({ name: call.name, count: result.count });
             sse.event('tool', { name: call.name, count: result.count });
@@ -427,6 +479,7 @@ export async function apply(ctx) {
             });
           }
         }
+        if (mutated.updated || mutated.deleted) sse.event('mutated', mutated);
         sse.event('finish', { reason: 'stop' });
 
         const { prose, tasks, ask } = splitTasks(acc);
