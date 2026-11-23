@@ -78,6 +78,21 @@ setTimeout(function () {
       }, 120);
     }
   }
+  if (location.hash.indexOf('ann') >= 0) {
+    var segs2 = document.querySelectorAll('.todo-head .todo-seg');
+    var vseg = segs2[segs2.length - 1];
+    if (vseg) { var cb = vseg.querySelectorAll('button')[1]; if (cb) cb.click(); }
+    setTimeout(function () {
+      var ab = document.querySelector('.todo-ann-btn');
+      if (ab) ab.click();
+      if (location.hash.indexOf('annform') >= 0) {
+        setTimeout(function () {
+          var add = document.querySelector('.todo-ann-add');
+          if (add) add.click();
+        }, 250);
+      }
+    }, 500);
+  }
   if (location.hash.indexOf('tochat') >= 0) {
     var chatBtn = document.querySelector('.todo-row .todo-todel');
     if (chatBtn) chatBtn.click();
@@ -169,7 +184,7 @@ setTimeout(function () {
     }, 200);
   }
   if (location.hash.indexOf('help') >= 0) {
-    var t = document.querySelector('.todo-tool');
+    var t = document.querySelector('.todo-tool[title="帮助"]');
     if (t) t.click();
   }
   if (location.hash.indexOf('create') >= 0) {

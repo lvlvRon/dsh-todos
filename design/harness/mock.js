@@ -78,6 +78,18 @@
       return reply({ ok: true, y, m, cells, range: { from: 1900, to: 2100 } });
     }
 
+    if (u.includes('/api/todo/events')) {
+      return reply({
+        ok: true,
+        today: '2026-11-23',
+        events: [
+          { id: 'e1', label: '妈妈生日', type: 'birthday', cal: 'lunar', month: 10, day: 17, next: '2026-11-25', daysLeft: 2 },
+          { id: 'e2', label: '结婚纪念日', type: 'anniversary', cal: 'solar', month: 12, day: 20, next: '2026-12-20', daysLeft: 27 },
+          { id: 'e3', label: '外公忌日', type: 'memorial', cal: 'lunar', month: 3, day: 3, next: '2027-04-09', daysLeft: 137 },
+        ],
+      });
+    }
+
     if (u.includes('/api/todo/conversation')) {
       return reply({
         ok: true,

@@ -140,7 +140,62 @@ window.__ModuleLoader__.load({
       { key: 'later', label: '以后' },
     ];
 
-    /** 草案项补齐默认值 */
+    /** 帮助浮层里的行内图标 */
+    function helpIcon(d) {
+      return h('svg', {
+        viewBox: '0 0 24 24', width: 15, height: 15, fill: 'none', stroke: 'currentColor',
+        strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round',
+      }, ...d.map((path, i) => h('path', { key: i, d: path })));
+    }
+
+    const HELP_SECTIONS = [
+      {
+        title: '和助手说话',
+        rows: [
+          { icon: ['M20 12.5a7.5 7.5 0 0 1-7.5 7.5H8l-4 3v-9.5A7.5 7.5 0 0 1 11.5 6H12a7.5 7.5 0 0 1 8 6.5z'], text: '粘贴截图或直接说一句话，拆成待办草案' },
+          { icon: ['M12 20h9', 'M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z'], text: '缺日期的草案会留下，补完才能创建' },
+          { icon: ['M4 7h16', 'M9 7V4.5h6V7', 'M6 7l1 13h10l1-13'], text: '点行尾气泡图标，把这条交给助手改' },
+          { icon: ['M9.5 9.4a2.6 2.6 0 1 1 3.4 2.5c-.9.3-1.3 1-1.3 1.9v.3', 'M11.6 17a.9.9 0 1 0 .01 0'], text: '助手提问时会出选项按钮，点一下即回答' },
+        ],
+      },
+      {
+        title: '列表',
+        rows: [
+          { icon: ['M8 6h13', 'M8 12h13', 'M8 18h13', 'M3 6h.01', 'M3 12h.01', 'M3 18h.01'], text: '时间段：今天 · 本周 · 本月 · 全部 · 已完成' },
+          { icon: ['M4 6h16', 'M4 12h10', 'M4 18h7'], text: '列表内分节：今天 · 三天内 · 7天内 · 以后' },
+          { icon: ['M5 12.5l4.5 4.5L19 7'], text: '勾选即完成；删除后 5 秒内可撤销' },
+        ],
+      },
+      {
+        title: '数据与模型',
+        rows: [
+          { icon: ['M4 7v10', 'M4 7l8 4 8-4', 'M12 11v10', 'M20 7v10'], text: '待办存在 DSH 存储域，不写工作区文件' },
+          { icon: ['M12 4v11', 'M8 8l4-4 4 4', 'M8 16l4 4 4-4'], text: '顶部 ⇅ 按钮可导出 / 导入 JSON（含已完成）' },
+          { icon: ['M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 5.9L12 16.4 6.7 19.3 7.9 13.4 3.4 9.3l6-.7z'], text: '默认跟随 DSH 的模型，也可单独选与调推理等级' },
+        ],
+      },
+    ];
+
+    function renderHelp() {
+      return h('div', { className: 'todo-help' },
+        h('div', { className: 'todo-help-head' },
+          h('div', { className: 'todo-avatar todo-help-avatar' }, '步'),
+          h('div', null,
+            h('div', { className: 'todo-help-title' }, '待办助手'),
+            h('div', { className: 'todo-help-sub' }, '清单 · 日历 · 对话，都在这一块面板里'))),
+        ...HELP_SECTIONS.map((sec) => h('div', { key: sec.title, className: 'todo-help-sec' },
+          h('div', { className: 'todo-help-sec-title' }, sec.title),
+          ...sec.rows.map((row, i) => h('div', { key: i, className: 'todo-help-row' },
+            h('span', { className: 'todo-help-ico' }, helpIcon(row.icon)),
+            h('span', null, row.text))))),
+        h('div', { className: 'todo-help-sec' },
+          h('div', { className: 'todo-help-sec-title' }, '快捷键'),
+          h('div', { className: 'todo-help-keys' },
+            h('span', null, h('kbd', { className: 'todo-kbd' }, 'Enter'), ' 发送'),
+            h('span', null, h('kbd', { className: 'todo-kbd' }, 'Shift'), ' + ', h('kbd', { className: 'todo-kbd' }, 'Enter'), ' 换行'),
+            h('span', null, h('kbd', { className: 'todo-kbd' }, 'Esc'), ' 关闭浮层 / 取消编辑'))),
+        h('div', { className: 'todo-help-foot' }, '双击任意待办即可修改 · 助手改完会立即刷新列表'));
+    }
     function normalizeDraft(t) {
       return {
         title: String((t && t.title) || '').trim() || '未命名',
@@ -468,6 +523,111 @@ window.__ModuleLoader__.load({
        ============================================================ */
     const DOW = ['日', '一', '二', '三', '四', '五', '六'];
 
+    const ANN_TYPES = [
+      { id: 'birthday', name: '生日', color: '#c2255c' },
+      { id: 'anniversary', name: '纪念日', color: '#d9480f' },
+      { id: 'memorial', name: '忌日', color: '#495057' },
+      { id: 'other', name: '其他', color: '#4d6bfe' },
+    ];
+
+    function annTypeOf(id) {
+      return ANN_TYPES.find((t) => t.id === id) || ANN_TYPES[3];
+    }
+
+    function calText(ev) {
+      return ev.cal === 'lunar'
+        ? '农历 ' + ev.month + ' 月 ' + ev.day + ' 日' + (ev.leap ? '（闰）' : '')
+        : '公历 ' + ev.month + ' / ' + ev.day;
+    }
+
+    function leftText(days) {
+      if (days === null || days === undefined) return '';
+      if (days === 0) return '今天';
+      if (days === 1) return '明天';
+      return '还有 ' + days + ' 天';
+    }
+
+    /** 纪念日浮窗：列表 ↔ 表单 两屏 */
+    function renderAnnPopover(props) {
+      const { annList, annScreen, annDraft } = props;
+
+      if (annScreen === 'form' && annDraft) {
+        const set = (k, v) => props.onAnnDraft({ ...annDraft, [k]: v });
+        return h('div', { className: 'todo-ann-pop' },
+          h('div', { className: 'todo-ann-head' },
+            h('button', { className: 'todo-ann-back', onClick: () => props.onAnnScreen('list') }, '‹ 返回'),
+            h('span', { className: 'todo-ann-title' }, annDraft.id ? '编辑纪念日' : '新增纪念日')),
+          h('div', { className: 'todo-ann-form' },
+            h('input', {
+              className: 'todo-field', style: { width: '100%', maxWidth: 'none' },
+              placeholder: '名称，如「妈妈生日」', value: annDraft.label,
+              onChange: (e) => set('label', e.target.value),
+            }),
+            h('div', { className: 'todo-ann-chips' },
+              ...ANN_TYPES.map((t) => h('button', {
+                key: t.id, className: 'todo-ann-chip', 'data-on': annDraft.type === t.id ? '1' : '0',
+                onClick: () => set('type', t.id),
+              }, t.name))),
+            h('div', { className: 'todo-ann-chips' },
+              h('button', {
+                className: 'todo-ann-chip', 'data-on': annDraft.cal === 'solar' ? '1' : '0',
+                onClick: () => set('cal', 'solar'),
+              }, '公历'),
+              h('button', {
+                className: 'todo-ann-chip', 'data-on': annDraft.cal === 'lunar' ? '1' : '0',
+                onClick: () => set('cal', 'lunar'),
+              }, '农历'),
+              annDraft.cal === 'lunar'
+                ? h('button', {
+                    className: 'todo-ann-chip', 'data-on': annDraft.leap ? '1' : '0',
+                    onClick: () => set('leap', !annDraft.leap),
+                  }, '闰月')
+                : null),
+            h('div', { className: 'todo-ann-date' },
+              h('input', {
+                className: 'todo-field', type: 'number', min: 1, max: 12, style: { maxWidth: '78px' },
+                value: annDraft.month, onChange: (e) => set('month', Number(e.target.value)),
+              }),
+              h('span', { className: 'todo-ann-unit' }, '月'),
+              h('input', {
+                className: 'todo-field', type: 'number', min: 1, max: 31, style: { maxWidth: '78px' },
+                value: annDraft.day, onChange: (e) => set('day', Number(e.target.value)),
+              }),
+              h('span', { className: 'todo-ann-unit' }, '日')),
+            h('input', {
+              className: 'todo-field', style: { width: '100%', maxWidth: 'none' },
+              placeholder: '备注（可选）', value: annDraft.notes || '',
+              onChange: (e) => set('notes', e.target.value),
+            }),
+            h('div', { className: 'todo-ann-actions' },
+              annDraft.id
+                ? h('button', { className: 'todo-ann-danger', onClick: props.onAnnRemove }, '删除')
+                : null,
+              h('span', { style: { flex: 1 } }),
+              h('button', { className: 'todo-btn-ghost', onClick: () => props.onAnnScreen('list') }, '取消'),
+              h('button', { className: 'todo-btn-primary', onClick: props.onAnnSave }, '保存'))),
+        );
+      }
+
+      return h('div', { className: 'todo-ann-pop' },
+        h('div', { className: 'todo-ann-head' },
+          h('span', { className: 'todo-ann-title' }, '我的纪念日 ' + (annList.length || '')),
+          h('button', { className: 'todo-ann-add', onClick: props.onAnnNew }, '＋ 新增')),
+        annList.length
+          ? h('div', null, ...annList.map((ev) => {
+            const t = annTypeOf(ev.type);
+            return h('div', {
+              key: ev.id, className: 'todo-ann-row', onClick: () => props.onAnnEdit(ev),
+            },
+              h('i', { className: 'todo-ann-dot', style: { background: t.color } }),
+              h('span', { className: 'todo-ann-name' }, ev.label),
+              h('span', { className: 'todo-ann-cal' }, calText(ev)),
+              h('span', { className: 'todo-ann-left' }, leftText(ev.daysLeft)));
+          }))
+          : h('div', { className: 'todo-ann-empty' }, '还没有纪念日，点右上角「＋ 新增」'),
+      );
+    }
+
     function CalendarView(props) {
       const { y, m, cells, todos, todayKey, loading, range, pickerOpen } = props;
       const byDate = {};
@@ -488,6 +648,11 @@ window.__ModuleLoader__.load({
           h('button', { className: 'todo-cal-month', onClick: props.onTogglePicker }, y + ' 年 ' + m + ' 月'),
           h('button', { className: 'todo-icon-btn', onClick: props.onNext, title: '下个月', style: { fontSize: '16px' } }, '›'),
           h('button', { className: 'todo-cal-today', onClick: props.onToday }, '本月'),
+          h('button', {
+            className: 'todo-ann-btn', 'data-on': props.annOpen ? '1' : '0',
+            onClick: props.onToggleAnn,
+          }, '纪念日' + (props.annList && props.annList.length ? ' ' + props.annList.length : '')),
+          props.annOpen ? renderAnnPopover(props) : null,
           pickerOpen
             ? h('div', { className: 'todo-cal-picker' },
                 h('select', {
@@ -1108,6 +1273,64 @@ window.__ModuleLoader__.load({
       const [pickerOpen, setPickerOpen] = React.useState(false);
       const wheelLock = React.useRef(0);
 
+      /* —— 纪念日 —— */
+      const [annList, setAnnList] = React.useState([]);
+      const [annOpen, setAnnOpen] = React.useState(false);
+      const [annScreen, setAnnScreen] = React.useState('list');
+      const [annDraft, setAnnDraft] = React.useState(null);
+      const [calTick, setCalTick] = React.useState(0);
+
+      const loadEvents = React.useCallback(async () => {
+        try {
+          const d = await api('GET', 'events');
+          setAnnList(d.events || []);
+        } catch (e) { /* 忽略 */ }
+      }, []);
+
+      React.useEffect(() => { loadEvents(); }, [loadEvents]);
+
+      const annNew = () => {
+        setAnnDraft({ label: '', type: 'birthday', cal: 'solar', month: 1, day: 1, leap: false, notes: '' });
+        setAnnScreen('form');
+      };
+      const annEdit = (ev) => { setAnnDraft({ ...ev }); setAnnScreen('form'); };
+      const annSave = async () => {
+        const d = annDraft;
+        if (!d || !String(d.label).trim()) { setToast({ text: '请先填写名称' }); return; }
+        try {
+          await api('POST', 'event', {
+            event: {
+              id: d.id,
+              label: String(d.label).trim(),
+              type: d.type,
+              cal: d.cal,
+              month: Number(d.month),
+              day: Number(d.day),
+              leap: d.cal === 'lunar' ? Boolean(d.leap) : null,
+              notes: d.notes || null,
+            },
+          });
+          setAnnScreen('list');
+          await loadEvents();
+          setCalTick((t) => t + 1);
+          setToast({ text: '已保存「' + String(d.label).trim() + '」' });
+        } catch (e) {
+          setToast({ text: '保存失败：' + ((e && e.message) || e) });
+        }
+      };
+      const annRemove = async () => {
+        if (!annDraft || !annDraft.id) { setAnnScreen('list'); return; }
+        try {
+          await api('POST', 'event-remove', { id: annDraft.id });
+          setAnnScreen('list');
+          await loadEvents();
+          setCalTick((t) => t + 1);
+          setToast({ text: '已删除「' + annDraft.label + '」' });
+        } catch (e) {
+          setToast({ text: '删除失败：' + ((e && e.message) || e) });
+        }
+      };
+
       React.useEffect(() => {
         if (view !== 'calendar') return undefined;
         let alive = true;
@@ -1120,7 +1343,7 @@ window.__ModuleLoader__.load({
             setToast({ text: '日历加载失败：' + ((e && e.message) || e) });
           });
         return () => { alive = false; };
-      }, [view, calY, calM]);
+      }, [view, calY, calM, calTick]);
 
       const shiftMonth = (delta) => {
         let y = calY;
@@ -1550,16 +1773,7 @@ window.__ModuleLoader__.load({
             h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinejoin: 'round' },
               h('rect', { x: 3.6, y: 5, width: 16.8, height: 14, rx: 2.6 }),
               h('path', { d: 'M14.6 5v14' })))),
-        helpOpen
-          ? h('div', { className: 'todo-help' },
-              h('div', { className: 'todo-help-title' }, '怎么用'),
-              h('div', { className: 'todo-help-row' }, '粘贴截图或直接说一句话，会拆成待办草案'),
-              h('div', { className: 'todo-help-row' }, '草案卡：缺日期的补完才能创建，创建过的会打 ✓'),
-              h('div', { className: 'todo-help-row' }, '列表里勾选即完成，删除有 5 秒撤销'),
-              h('div', { className: 'todo-help-row' }, '双击任意待办进入编辑；改动后需保存或取消才能退出'),
-              h('div', { className: 'todo-help-row' }, '助手提问时会给出选项按钮，点一下就等于回答'),
-              h('div', { className: 'todo-help-row' }, '顶部两个图标切换列表 / 日历'))
-          : null,
+        helpOpen ? renderHelp() : null,
       );
 
       const body = h('div', { className: 'todo-body' },
@@ -1639,6 +1853,17 @@ window.__ModuleLoader__.load({
             onPickYear: (yy) => { setCalY(yy); setPickerOpen(false); },
             onPickMonth: (mm) => { setCalM(mm); setPickerOpen(false); },
             onWheel: onCalWheel,
+            annList,
+            annOpen,
+            annScreen,
+            annDraft,
+            onToggleAnn: () => setAnnOpen((v) => !v),
+            onAnnNew: annNew,
+            onAnnEdit: annEdit,
+            onAnnSave: annSave,
+            onAnnRemove: annRemove,
+            onAnnScreen: setAnnScreen,
+            onAnnDraft: setAnnDraft,
           })
         : body;
 

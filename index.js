@@ -9,7 +9,7 @@
 
 import { todoSpec, normalize, compare, now } from './lib/domain.js';
 import { send, fail, readJson, guard, openSse } from './lib/channel.js';
-import { buildMonth, TABLE_RANGE } from './lib/calendar.js';
+import { buildMonth, TABLE_RANGE, nextOccurrence } from './lib/calendar.js';
 import { buildSystemPrompt, splitTasks, visibleText, TODO_TOOLS, runTodoQuery } from './lib/chat.js';
 
 export const inject = ['webServer', 'storageDomain'];
@@ -527,7 +527,23 @@ export async function apply(ctx) {
     path: '/api/todo/events',
     handler: (req, res) => {
       if (!guard(req, res)) return;
-      send(res, 200, { ok: true, events: [...events.entries()].map(([, v]) => v) });
+      const pad2 = (n) => String(n).padStart(2, '0');
+      const d = new Date();
+      const today = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+
+      const rows = [...events.entries()].map(([, v]) => {
+        const next = nextOccurrence(v, today);
+        const daysLeft = next
+          ? Math.round((Date.parse(next) - Date.parse(today)) / 86400000)
+          : null;
+        return { ...v, next, daysLeft };
+      }).sort((a, b) => {
+        const ad = a.daysLeft === null ? 1e9 : a.daysLeft;
+        const bd = b.daysLeft === null ? 1e9 : b.daysLeft;
+        return ad - bd;
+      });
+
+      send(res, 200, { ok: true, events: rows, today });
     },
   });
 
@@ -546,10 +562,12 @@ export async function apply(ctx) {
         const event = {
           id,
           label: String(input.label),
+          type: ['birthday', 'anniversary', 'memorial', 'other'].includes(input.type) ? input.type : 'other',
           cal: input.cal === 'lunar' ? 'lunar' : 'solar',
           month: Number(input.month),
           day: Number(input.day),
           leap: input.cal === 'lunar' ? Boolean(input.leap) : null,
+          notes: input.notes ? String(input.notes) : null,
         };
         await events.put(id, event);
         send(res, 200, { ok: true, event });
