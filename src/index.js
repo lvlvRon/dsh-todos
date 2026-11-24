@@ -1170,14 +1170,19 @@ window.__ModuleLoader__.load({
         .filter(Boolean).join(' · ');
 
       /* 四档色：富余 / 后半程 / 来不及 / 逾期 */
+      /* 阶段色：灰(未开始) → 蓝(进行中) → 橙(该收尾/明天截止) → 红(今天截止) → 深红(逾期) */
       let tier = 'normal';
       if (phase === 'done') tier = 'done';
       else if (phase === 'over') tier = 'over';
       else if (phase === 'today') tier = 'late';
       else if (phase === 'tomorrow') tier = 'start';
-      else if (phase === 'active' && startISO && dueISO) {
-        const span = Math.max(1, toDue - toStart);
-        tier = (-toStart / span) >= 0.75 ? 'start' : 'normal';
+      else if (phase === 'active') {
+        if (startISO && dueISO) {
+          const span = Math.max(1, toDue - toStart);
+          tier = (-toStart / span) >= 0.75 ? 'start' : 'active';
+        } else {
+          tier = 'active';
+        }
       }
 
       if (editing) {
@@ -1205,7 +1210,6 @@ window.__ModuleLoader__.load({
           className: 'todo-when',
           title: fullWhen,
           'data-tier': tier,
-          'data-hot': t.dueTime ? '1' : '0',
         }, dueText) : null,
         progText ? h('span', {
           className: 'todo-prog',
