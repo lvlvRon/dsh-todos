@@ -523,11 +523,18 @@ window.__ModuleLoader__.load({
             : null,
           m.tools && m.tools.length
             ? h('div', { className: 'todo-tool-note' },
-                m.tools.map((t) => {
-                  if (t.name === 'update_todo') return '修改 ' + t.count + ' 条';
-                  if (t.name === 'delete_todo') return '删除 ' + t.count + ' 条';
-                  return '查询待办 ' + t.count + ' 条';
-                }).join(' · '))
+                (() => {
+                  const agg = new Map();
+                  m.tools.forEach((t) => {
+                    const cur = agg.get(t.name) || { n: 0, calls: 0 };
+                    agg.set(t.name, { n: cur.n + (t.count || 0), calls: cur.calls + 1 });
+                  });
+                  return [...agg.entries()].map(([name, v]) => {
+                    if (name === 'update_todo') return '修改 ' + v.n + ' 条';
+                    if (name === 'delete_todo') return '删除 ' + v.n + ' 条';
+                    return '查询待办 ' + v.n + ' 条' + (v.calls > 1 ? '（' + v.calls + ' 次）' : '');
+                  }).join(' · ');
+                })())
             : null,
           m.ask && m.ask.length
             ? h('div', { className: 'todo-ask' },

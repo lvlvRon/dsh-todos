@@ -357,6 +357,21 @@ export async function apply(ctx) {
           return;
         }
 
+        /* 这一轮没发图：把上一条用户消息里的截图带过来，保证追问时还看得见 */
+        let carried = 0;
+        if (imageRefs.length === 0) {
+          const prevUser = [...(conv.messages || [])]
+            .reverse()
+            .find((m) => m.role === 'user' && m.images && m.images.length);
+          if (prevUser) {
+            for (const ref of prevUser.images.slice(0, 2)) {
+              content.push({ type: 'image', attachment: ref });
+              imageRefs.push(ref);
+              carried += 1;
+            }
+          }
+        }
+
         const system = buildSystemPrompt({
           now: new Date(),
           todos: [...table.entries()].map(([, v]) => v),
@@ -366,7 +381,7 @@ export async function apply(ctx) {
         });
 
         const textParts = [system, ...content.filter((c) => c.type === 'text').map((c) => c.text)];
-        const usedTokens = estimateTokens(textParts) + images.length * 800;
+        const usedTokens = estimateTokens(textParts) + (images.length + carried) * 800;
         const totalTokens = await contextWindowOf(llm, selection.provider, selection.model);
 
         sse.event('start', {
