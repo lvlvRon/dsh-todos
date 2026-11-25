@@ -357,13 +357,17 @@ export async function apply(ctx) {
           return;
         }
 
-        /* 这一轮没发图：把上一条用户消息里的截图带过来，保证追问时还看得见 */
+        /* 这一轮没发图：若上一轮没抽出结构化结果，才把截图带过来兜底 */
         let carried = 0;
         if (imageRefs.length === 0) {
-          const prevUser = [...(conv.messages || [])]
+          const msgs = conv.messages || [];
+          const prevUser = [...msgs]
             .reverse()
             .find((m) => m.role === 'user' && m.images && m.images.length);
-          if (prevUser) {
+          const idx = prevUser ? msgs.lastIndexOf(prevUser) : -1;
+          const after = idx >= 0 ? msgs.slice(idx + 1) : [];
+          const alreadyExtracted = after.some((m) => m.shot && m.shot.items && m.shot.items.length);
+          if (prevUser && !alreadyExtracted) {
             for (const ref of prevUser.images.slice(0, 2)) {
               content.push({ type: 'image', attachment: ref });
               imageRefs.push(ref);
@@ -399,9 +403,12 @@ export async function apply(ctx) {
         const pad2 = (n) => String(n).padStart(2, '0');
         const todayStr = new Date().getFullYear() + '-' + pad2(new Date().getMonth() + 1) + '-' + pad2(new Date().getDate());
 
-        /* 工具循环：模型需要库里的明细时自己发起查询，最多 3 轮 */
-        while (rounds < 3) {
+        /* 工具循环：模型需要库里的明细时自己发起查询，最多 8 轮（超了走强制收尾） */
+        let lastRoundHadCalls = false;
+        const queryCache = new Map();
+        while (rounds < 8) {
           rounds += 1;
+          lastRoundHadCalls = false;
           const calls = [];
           for await (const chunk of llm.stream({
             provider: selection.provider,
@@ -429,6 +436,7 @@ export async function apply(ctx) {
             }
           }
           if (!calls.length) break;
+          lastRoundHadCalls = true;
 
           convo.push({
             id: 'a_' + Date.now() + '_' + rounds,
@@ -457,7 +465,14 @@ export async function apply(ctx) {
             try { args = JSON.parse(String(call.arguments || '{}')); } catch (e) { args = {}; }
 
             if (call.name === 'query_todos') {
-              result = runTodoQuery([...table.entries()], call.arguments, todayStr);
+              const cacheKey = String(call.arguments || '{}');
+              if (queryCache.has(cacheKey)) {
+                const hit = queryCache.get(cacheKey);
+                result = { text: hit.text, count: hit.count };
+              } else {
+                result = runTodoQuery([...table.entries()], call.arguments, todayStr);
+                queryCache.set(cacheKey, { text: result.text, count: result.count });
+              }
             } else if (call.name === 'delete_todo') {
               const target = resolveTodo(args.id);
               if (!target) {
@@ -499,6 +514,9 @@ export async function apply(ctx) {
             }
             usedTools.push({ name: call.name, count: result.count });
             sse.event('tool', { name: call.name, count: result.count });
+            if (rounds >= 2 && call.name === 'query_todos') {
+              result.text += '\n\n（已经查过 ' + rounds + ' 轮了：直接基于以上信息回答，不要再调用工具。）';
+            }
             convo.push({
               id: 't_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
               createdAt: Date.now(),
@@ -509,12 +527,42 @@ export async function apply(ctx) {
             });
           }
         }
+
+        /* 轮次用尽仍在调工具、又没说出人话：强制要一次纯文字结论 */
+        if (lastRoundHadCalls && visibleText(acc).trim().length < 8) {
+          try {
+            for await (const chunk of llm.stream({
+              provider: selection.provider,
+              model: selection.model,
+              reasoningEffort: selection.reasoningEffort || undefined,
+              system,
+              messages: [...convo, {
+                id: 'u_final_' + Date.now(),
+                createdAt: Date.now(),
+                role: 'user',
+                content: [{ type: 'text', text: '（不要再调用任何工具。用 1–2 句人话直接回答上面的问题。）' }],
+              }],
+              tools: [],
+              signal: controller.signal,
+            })) {
+              if (chunk.type === 'text-delta') {
+                acc += chunk.text;
+                const visible = visibleText(acc);
+                if (visible.length > sent) {
+                  sse.event('delta', { text: visible.slice(sent) });
+                  sent = visible.length;
+                }
+              }
+            }
+          } catch (e) { /* 失败就保持现状 */ }
+        }
         if (mutated.updated || mutated.deleted) sse.event('mutated', mutated);
         sse.event('finish', { reason: 'stop' });
 
-        const { prose, tasks, ask } = splitTasks(acc);
+        const { prose, tasks, ask, shot } = splitTasks(acc);
         if (tasks) sse.event('draft', tasks);
         if (ask) sse.event('ask', ask);
+        if (shot) sse.event('shot', { count: shot.items.length });
 
         const messages = [
           ...(conv.messages || []),
@@ -529,6 +577,7 @@ export async function apply(ctx) {
             text: prose,
             at: Date.now(),
             tools: usedTools.length ? usedTools : null,
+            shot: shot && shot.items.length ? shot : null,
             drafts: tasks && tasks.tasks && tasks.tasks.length ? tasks.tasks : null,
             missing: tasks && tasks.missing && tasks.missing.length ? tasks.missing : null,
             ask: ask && ask.options && ask.options.length ? ask.options : null,
@@ -664,6 +713,7 @@ export async function apply(ctx) {
           missing: m.missing || null,
           ask: m.ask || null,
           tools: m.tools || null,
+          shot: m.shot || null,
         })),
         total: (conv.messages || []).length,
         summary: conv.summary || null,

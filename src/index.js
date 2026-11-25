@@ -536,6 +536,10 @@ window.__ModuleLoader__.load({
                   }).join(' · ');
                 })())
             : null,
+          (m.shotCount || (m.shot && m.shot.items && m.shot.items.length))
+            ? h('div', { className: 'todo-tool-note' },
+                '截图识别 ' + (m.shotCount || m.shot.items.length) + ' 条')
+            : null,
           m.ask && m.ask.length
             ? h('div', { className: 'todo-ask' },
                 ...m.ask.map((opt, k) => h('button', {
@@ -1592,6 +1596,8 @@ window.__ModuleLoader__.load({
               setMessages((m) => m.map((x) => (x.id === aid
                 ? { ...x, tools: [...(x.tools || []), payload] }
                 : x)));
+            } else if (ev === 'shot' && payload) {
+              setMessages((m) => m.map((x) => (x.id === aid ? { ...x, shotCount: payload.count } : x)));
             } else if (ev === 'mutated' && payload) {
               setMessages((m) => m.map((x) => (x.id === aid ? { ...x, mutated: payload } : x)));
               load();   // 让列表立刻反映助手的改动
